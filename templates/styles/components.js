@@ -635,6 +635,12 @@
     }
     return live.filter(el => el.type !== 'radio' || !el.name || group(el).get(el.name) === el);
   }
+  // Whether a node is this dialog's own, by markup: its nearest dialog is this
+  // one, not one nested inside it (which may have closed a moment ago).
+  const owns = (entry, node) => {
+    const n = node instanceof Element && node.closest('dialog, .dialog-backdrop, .dialog');
+    return !!n && (n === entry.box || n === entry.backdrop || n === entry.el);
+  };
   const entryOf = el => stack.find(e => e.el === el || e.box === el || e.backdrop === el);
   const isClose = el => el instanceof Element
     && (el.closest('[data-dialog-close]') || el.closest('.dialog-header button[aria-label="Close"]'));
@@ -672,8 +678,11 @@
       entry.opener.disabled = true;
       entry.reenable = true;
     }
-    entry.onInput = () => { entry.dirty = true; };
+    // A dialog answers only for what is its own, not a dialog nested in its
+    // markup: an inner Cancel or inner typing never closes or dirties the outer.
+    entry.onInput = e => { if (owns(entry, e.target)) entry.dirty = true; };
     entry.onClick = e => {
+      if (!owns(entry, e.target)) return;
       if (isClose(e.target)) { request(entry, 'button'); return; }
       const outside = native
         ? e.target === box && !within(box, e)
@@ -683,6 +692,7 @@
     // mousedown, not pointerdown: cancelling it keeps focus in the dialog when
     // the press lands on the backdrop (and is then refused, say for typing).
     entry.onDown = e => {
+      if (!owns(entry, e.target)) return;
       entry.downOutside = native ? e.target === box && !within(box, e) : e.target === backdrop;
       if (entry.downOutside) e.preventDefault();
     };

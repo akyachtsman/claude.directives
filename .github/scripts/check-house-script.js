@@ -339,6 +339,34 @@ const page = await open({ width: 1280, height: 800 });
   });
   check(firstLive === 'np-cancel', 'with its primary act turned off, a dialog puts first focus on a live button', firstLive);
 
+  // A page dialog nested in another's markup: its Cancel and its typing are
+  // its own, so the outer one stays open and clean.
+  const nested = await page.evaluate(async () => {
+    const shell = (id, inner) => `<div class="dialog-backdrop" id="${id}" hidden><div class="dialog"><div class="dialog-body">`
+      + `<input class="input" type="text" id="${id}-field" aria-label="Field">${inner}</div><div class="dialog-footer">`
+      + `<button type="button" class="btn btn-secondary" id="${id}-cancel" data-dialog-close>Cancel</button></div></div></div>`;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = shell('nest-outer', shell('nest-inner', ''));
+    document.body.append(wrap);
+    const outer = document.getElementById('nest-outer'), inner = document.getElementById('nest-inner');
+    House.dialog.open(outer);
+    House.dialog.open(inner);
+    const field = document.getElementById('nest-inner-field');
+    field.value = 'x';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('nest-inner-cancel').click();
+    await new Promise(r => setTimeout(r, 30));
+    const afterInner = { inner: inner.hidden, outer: !outer.hidden };
+    document.getElementById('nest-outer-field').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await new Promise(r => setTimeout(r, 30));
+    const r = { ...afterInner, outerClosedByEsc: outer.hidden };
+    if (!outer.hidden) House.dialog.close(outer);
+    wrap.remove();
+    return r;
+  });
+  check(nested.inner && nested.outer && nested.outerClosedByEsc,
+    'a dialog nested in another\'s markup: its Cancel closes only it, and its typing does not hold the outer one open', JSON.stringify(nested));
+
   await clearLog(page);
   await page.click('#open-form');
   await page.evaluate(() => House.dialog.setBusy(document.getElementById('form-dialog')));

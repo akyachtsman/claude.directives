@@ -7,12 +7,13 @@
 // Two halves, one page per case, each built from the SHIPPED tokens.css and
 // components.css:
 //   * the house components pass: a long type-ahead list (also one already
-//     scrolled to its end), a long ⋮ menu, a
-//     dialog taller than the screen, an overlay holding visually-hidden text;
+//     scrolled to its end), a long ⋮ menu, a dialog taller than the screen,
+//     an overlay holding visually-hidden text;
 //   * each way an overlay fails on an iPhone is caught, with the problem it
 //     must name: a sheet that clips its list (the 2026-10-25 board-post list),
-//     a pop-over running off the screen, a script scroll lock that cancels
-//     touchmove, touch-action: none, and a script that puts scrollTop back.
+//     a pop-over running off the screen or opened wholly below it, a script
+//     scroll lock that cancels touchmove, touch-action: none, and a script
+//     that puts scrollTop back.
 // A fit.js that stops catching one of them turns its case red; a house rule
 // that stops fitting turns a house case red.
 //
@@ -77,6 +78,9 @@ const CASES = [
   { name: 'a pop-over that runs off the bottom of the screen',
     body: `<div id="pop" style="position:fixed;left:12px;top:400px;width:300px;background:#fff">${rows(30)}</div>`,
     target: '#pop', expect: ['OFF SCREEN'] },
+  { name: 'a menu opened wholly below the screen (under the keyboard)',
+    body: `<div class="menu-pop" id="mp" style="top:2000px;left:12px">${items(3)}</div>`,
+    target: '.menu-pop', expect: ['OFF SCREEN'] },
   { name: 'a script scroll lock that cancels every touchmove',
     body: `<div class="list-pop" role="listbox" style="top:100px;left:12px">${rows(30)}</div>`,
     script: `document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });`,

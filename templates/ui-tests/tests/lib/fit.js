@@ -14,8 +14,10 @@
 //     on it or an ancestor, a modal <dialog>, an open popover) runs past the
 //     visible area (window.visualViewport, which on a phone shrinks for the
 //     on-screen keyboard), and no box between that part and the overlay
-//     scrolls, so nothing can bring it into view. An element entirely outside
-//     the screen is not counted: that is how visually-hidden text is placed.
+//     scrolls, so nothing can bring it into view. That includes an overlay
+//     opened wholly off the screen (under the keyboard, say). Inside one, an
+//     element entirely outside the screen is not counted: that is how
+//     visually-hidden text is placed.
 //   * CUT OFF — a box holds more than it shows (by more than 8px, and it is at
 //     least 24px tall: smaller is an icon or visually-hidden text) and its
 //     overflow-y is hidden or clip, so the rest cannot be reached at all.
@@ -79,7 +81,7 @@ async function fitProblems(locator, { timeout = FIT_MS } = {}) {
               if (n === root) break;
             }
           }
-          if (inside && past && !held) {
+          if ((inside || el === root) && past && !held) {
             problems.push(`OFF SCREEN: ${name(el)} runs past the visible screen (box ${Math.round(r.top)}–${Math.round(r.bottom)} x ${Math.round(r.left)}–${Math.round(r.right)}, screen ${Math.round(view.top)}–${Math.round(view.bottom)} x ${Math.round(view.left)}–${Math.round(view.right)}) and nothing scrolls it into view`);
           }
         }

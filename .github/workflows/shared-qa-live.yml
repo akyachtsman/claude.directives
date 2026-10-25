@@ -18,7 +18,7 @@
 #     actions: read
 #   jobs:
 #     live:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa-live.yml@<tag>
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa-live.yml@v1
 #       with:
 #         tests-dir: .github/scripts/ui-tests
 #         app-url: ${{ inputs.app_url }}

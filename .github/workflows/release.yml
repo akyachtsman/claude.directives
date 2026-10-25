@@ -1,0 +1,175 @@
+# release.yml — the one-click release (#460 step 4, Phase B; owner, 2026-10-25).
+#
+# The owner presses "Run workflow" on the Actions tab. The run stamps the
+# current `main` as the next repo-wide version: one number for everything in
+# this repo at that commit (v1.0.0, then v1.1.0 after the next batch). It
+# publishes a GitHub release `vX.Y.Z` whose notes list what changed since the
+# release before, and moves the `v<major>` tag (`v1`) to it. A project pins
+# `@v1` to follow the latest release, or `@vX.Y.Z` to stay on one.
+#
+# Why a workflow: a session here cannot create a tag or a release (HTTP 403
+# through its proxy; docs/internal/shared-workflows.md → Spike findings), but
+# this run's GITHUB_TOKEN can.
+#
+# What it refuses, so a bad press publishes nothing:
+#   - any ref but main;
+#   - a commit whose `QA — Directive Validation` run is missing, still running
+#     or red. That run includes the shared-workflow self-tests, so a `v1` that
+#     every project follows never moves onto a commit this repo has not proved;
+#   - a commit behind the latest release, or one already carrying an older one.
+# The version and the notes come from .github/scripts/release-plan.js, whose
+# rules are pinned by release-plan-cases.js in qa.yml. Pressing again on a
+# commit that is already the latest release cuts nothing new: it re-checks the
+# release and the `v1` tag and repairs whichever is missing, so a run that
+# failed half way is fixed by pressing again.
+#
+# `dry-run` prints the version and the notes and publishes nothing.
+#
+# Rollback is the same button: `rollback-to: v1.1.0` points `v1` back at that
+# release and cuts nothing. The vX.Y.Z tags never move, and the next release
+# still counts up from the highest one (v1.3.0 after v1.2.0, even with `v1`
+# rolled back to v1.1.0). How to press it and what each project pins:
+# docs/internal/shared-workflows.md → Releases.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'minor: a normal batch. patch: a fix-only batch. major: a breaking change (starts v2).'
+        type: choice
+        options: [minor, patch, major]
+        default: minor
+      summary:
+        description: 'Optional one line at the top of the release notes'
+        type: string
+        required: false
+        default: ''
+      rollback-to:
+        description: 'Rollback only: a published release (like v1.1.0) to point its major tag back at. Leave empty to cut a release.'
+        type: string
+        required: false
+        default: ''
+      dry-run:
+        description: 'Show what would happen; publish and move nothing'
+        type: boolean
+        default: false
+
+# contents: write to create the release and move the tag; actions: read to
+# look up the QA run on the commit.
+permissions:
+  contents: write
+  actions: read
+
+# One release at a time, and a running one is never cancelled half way.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Cut release
+    runs-on: ubuntu-24.04   # pinned with qa.yml's jobs: see there
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.sha }}
+    steps:
+      - name: Refuse anything but main
+        if: ${{ inputs.rollback-to == '' }}
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::A release is cut from main only; this run is on $REF. Pick 'main' in the Run workflow menu."
+            exit 1
+          fi
+
+      - name: Require a green QA run on this commit
+        if: ${{ inputs.rollback-to == '' }}
+        run: |
+          runs=$(gh run list --repo "$REPO" --workflow qa.yml --commit "$SHA" \
+            --limit 50 --json status,conclusion,url)
+          if [ "$(jq '[.[] | select(.conclusion == "success")] | length' <<<"$runs")" -gt 0 ]; then
+            echo "QA is green on ${SHA:0:7}: $(jq -r '[.[] | select(.conclusion == "success")][0].url' <<<"$runs")"
+          elif [ "$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")" -gt 0 ]; then
+            echo "::error::QA is still running on ${SHA:0:7}. Press Run workflow again once it is green."
+            exit 1
+          elif [ "$(jq 'length' <<<"$runs")" -gt 0 ]; then
+            echo "::error::QA is red on ${SHA:0:7} ($(jq -r '.[0].url' <<<"$runs")). Nothing was released."
+            exit 1
+          else
+            echo "::error::QA has no run on ${SHA:0:7} yet. Nothing was released."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        if: ${{ inputs.rollback-to == '' }}
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Plan the version and notes
+        if: ${{ inputs.rollback-to == '' }}
+        id: plan
+        env:
+          BUMP: ${{ inputs.bump }}
+          SUMMARY: ${{ inputs.summary }}
+        run: |
+          node .github/scripts/release-plan.js --sha "$SHA" --bump "$BUMP" \
+            --summary "$SUMMARY" --notes-out "$RUNNER_TEMP/notes.md"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Release plan"
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Find the release to roll back to
+        if: ${{ inputs.rollback-to != '' }}
+        id: rollback
+        env:
+          TARGET: ${{ inputs.rollback-to }}
+        run: |
+          if ! [[ "$TARGET" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::rollback-to must be a release like v1.1.0, not '$TARGET'."
+            exit 1
+          fi
+          if ! gh release view "$TARGET" --repo "$REPO" >/dev/null 2>&1; then
+            echo "::error::$TARGET is not a published release. Nothing was moved."
+            exit 1
+          fi
+          target_sha=$(gh api "repos/$REPO/commits/$TARGET" --jq .sha)
+          {
+            echo "version=$TARGET"
+            echo "major=v${BASH_REMATCH[1]}"
+            echo "sha=$target_sha"
+          } >> "$GITHUB_OUTPUT"
+          echo "Rolling v${BASH_REMATCH[1]} back to $TARGET (${target_sha:0:7})." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release
+        if: ${{ inputs.rollback-to == '' && !inputs.dry-run }}
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          if gh release view "$VERSION" --repo "$REPO" >/dev/null 2>&1; then
+            echo "$VERSION is already published; leaving it as it is."
+          else
+            gh release create "$VERSION" --repo "$REPO" --target "$SHA" \
+              --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --latest
+          fi
+
+      - name: Move the major tag to the release
+        if: ${{ !inputs.dry-run }}
+        env:
+          MAJOR: ${{ steps.plan.outputs.major || steps.rollback.outputs.major }}
+          VERSION: ${{ steps.plan.outputs.version || steps.rollback.outputs.version }}
+          SHA: ${{ steps.plan.outputs.sha || steps.rollback.outputs.sha }}
+        run: |
+          if gh api "repos/$REPO/git/ref/tags/$MAJOR" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$REPO/git/refs/tags/$MAJOR" -f sha="$SHA" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$MAJOR" -f sha="$SHA" >/dev/null
+          fi
+          echo "$MAJOR now points at $VERSION (${SHA:0:7})." | tee -a "$GITHUB_STEP_SUMMARY"

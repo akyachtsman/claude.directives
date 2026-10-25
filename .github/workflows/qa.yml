@@ -332,6 +332,13 @@ jobs:
       - name: Check the browser ladder enforces what it claims
         run: node .github/scripts/check-browser-ladder-cases.js
 
+      # The one-click release (release.yml) runs only when the owner presses it,
+      # so a wrong version or notes would first show as a published tag. Every
+      # rule release-plan.js applies is pinned here, against a throwaway git
+      # repository. Drive a mutated copy with RELEASE_PLAN_BIN.
+      - name: Check the release plan picks the version and notes it claims
+        run: node .github/scripts/release-plan-cases.js
+
       # CLAUDE.md's Local gate is this job, run by run-local-gate.py from this
       # file, so a step added here is run locally with no second list to edit.
       # The runner is trusted when it says OK, so it has cases like any guard:

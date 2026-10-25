@@ -19,7 +19,7 @@
 #     cancel-in-progress: false
 #   jobs:
 #     deploy:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-pages-deploy.yml@<tag>
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-pages-deploy.yml@v1
 #       with:
 #         build-cmd: ''
 #         site-dir: '.'

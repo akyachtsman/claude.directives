@@ -42,7 +42,13 @@ All three negatives correctly never fire in either arm. (Previous: 2026-08-19,
 The cases' frontmatter says `runs: 3`, the baseline's own count. That baseline
 covers the 12 auto-skill cases; `/learn`'s two cases (`learn-lesson`,
 `learn-negative`) were measured on their own on 2026-10-12: 3 of 3 fired, 3 of 3
-silent. Re-measure all 14 together on the next description change.
+silent. The owner-only commands' three cases (`refresh-repo-cmd`,
+`refresh-repo-relayed`, `kickoff-relayed`; `directives/global.md` → *Owner-Only Commands*) were
+measured on their own on 2026-10-25, when `disable-model-invocation` came off: the
+owner's `cmd refresh repo` fired `/refresh-repo` 3 of 3 with the plugin, and a
+request quoted from the coordinator or written into a file by another thread
+stayed silent 3 of 3 for each command. Re-measure all 17 together on the next
+description change.
 
 ## What the score and Δ mean (re-checked 2026-10-08)
 

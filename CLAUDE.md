@@ -157,7 +157,7 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 
 **Auto-skills are the only surface nothing else proves.** `update-pages`,
 `scope-chk`, `doc-comp` and the model-invocable `/learn` fire on description match, so a description that
-drifts stops firing silently — no error, just absence. `claude plugin eval`
+drifts stops firing silently — no error, just absence. The owner-only `/refresh-repo` and `/kickoff` (`directives/global.md` → *Owner-Only Commands*) ride on their descriptions the same way: they must fire on the owner's `cmd <name>` and stay silent on another Claude's request. `claude plugin eval`
 (Anthropic; owner ruling, 2026-10-12) runs the cases in `plugins/directives-toolkit/evals/`;
 run it when a description changes, from the plugin directory:
 `claude plugin eval --no-publish .`

@@ -47,6 +47,15 @@ case; the marker read as truthy rather than exactly true -> the "true"-string
 case. house-style-inventory.sh is new, so HOUSE_STYLE_INVENTORY_BIN = an empty
 file -> all 5 inventory cases.
 
+THE SHARED PAGE SCRIPT (#471, 2026-10-25). styles/components.js is the third
+house file: verbatim, required on a marked project where the pin ships it
+(the fixture ships it from the head only, so a pin at the stamp predates it).
+MEASURED against the scripts at 03c55c3, each swapped in alone:
+REFRESH_DRIFT_BIN -> the MISSING and the local-edit drift cases;
+REFRESH_STAMP_BIN -> the not-taken and the absent stamp cases;
+REFRESH_LIB_BIN -> the local-edit drift case (no template mapping, so the
+loop reads the script as NO-TEMPLATE).
+
 MEASURED 2026-10-13 against the pre-fix scripts (100d6b4, with only the
 hard-coded upstream URL replaced by ${REFRESH_UPSTREAM:-...} so they could be
 pointed at the fixture), each swapped in alone:
@@ -338,6 +347,7 @@ TOKENS_S = """:root {
 TOKENS_H = TOKENS_S.replace("}\n", "  --color-new: #8C887F;\n}\n")
 COMP_S = ".btn { color: var(--color-accent); }\n"
 COMP_H = COMP_S + ".field { border-color: var(--color-new); }\n"
+JS_H = "window.House = {};\n"   # the shared page script, shipped from the head only (#471)
 SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
                        "hooks": {"SessionStart": [{"hooks": [
                            {"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"}]}]}},
@@ -381,6 +391,7 @@ H_FILES = {
     "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v2')\n",
     "templates/styles/tokens.css": TOKENS_H,
     "templates/styles/components.css": COMP_H,
+    "templates/styles/components.js": JS_H,
 }
 EXEC = {"templates/claude-hooks/session-start.sh",
         "templates/scripts/guard.py", "templates/scripts/lint.py"}
@@ -1183,9 +1194,10 @@ expect("vars: after the stamp consumed Phase 2's marker it refuses, never a fals
 RULED = TOKENS_H.replace("#F5F5F3", "#020305").replace("#106AD0", "#FFD21A")   # an owner-ruled dark palette
 
 
-def house(name, tokens=TOKENS_H, comp=COMP_H, mark=True, extra=None, **kw):
+def house(name, tokens=TOKENS_H, comp=COMP_H, js=JS_H, mark=True, extra=None, **kw):
     sync = {"house_style": mark} if mark is not None else {}
-    return project(name, changes={"styles/tokens.css": tokens, "styles/components.css": comp, **(extra or {})},
+    return project(name, changes={"styles/tokens.css": tokens, "styles/components.css": comp,
+                                  "styles/components.js": js, **(extra or {})},
                    sync_extra=sync, **kw)
 
 
@@ -1202,6 +1214,16 @@ expect("house drift: a local edit to components.css is CUSTOM",
 r = house("house-comp-gone", comp=None)
 expect("house drift: an absent components.css is MISSING, never skipped",
        run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "MISSING: styles/components.css")
+# The shared page script (#471): a verbatim drop-in like components.css, but
+# shipped from the head only, so a pin that predates it requires nothing.
+r = house("house-js-gone", js=None)
+expect("house drift: an absent components.js is MISSING where the pin ships it",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "MISSING: styles/components.js")
+expect("house drift: …and not where the pin predates it",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": S}), 0, "TOKENS:", absent="styles/components.js")
+r = house("house-js-custom", js=JS_H + "// mine\n")
+expect("house drift: a local edit to components.js is a finding, never silent",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "DRIFT: styles/components.js")
 r = house("house-tokens-gone", tokens=None)
 expect("house drift: an absent tokens.css is MISSING, never skipped",
        run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "MISSING: styles/tokens.css")
@@ -1230,6 +1252,14 @@ r = house("house-stamp-comp", comp=COMP_S)
 run(r, "refresh-delta.sh")
 expect("house stamp: components.css not taken refuses",
        run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.css differs from templates/styles/components.css")
+r = house("house-stamp-js", js=JS_H + "// mine\n")
+run(r, "refresh-delta.sh")
+expect("house stamp: components.js not taken refuses",
+       run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.js differs from templates/styles/components.js")
+r = house("house-stamp-js-gone", js=None)
+run(r, "refresh-delta.sh")
+expect("house stamp: an absent components.js is required",
+       run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.js is absent but required -- the project is on the house style")
 r = house("house-stamp-comp-gone", comp=None)
 run(r, "refresh-delta.sh")
 expect("house stamp: an absent components.css is required",

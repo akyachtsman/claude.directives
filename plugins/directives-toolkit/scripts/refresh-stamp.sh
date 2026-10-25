@@ -416,6 +416,12 @@ EXTRA
     else
       echo "not shipped at $head, not compared: templates/styles/components.css"
     fi
+    if grep -qxF templates/styles/components.js <<<"$shipped"; then
+      check styles/components.js templates/styles/components.js \
+        "the project is on the house style (.claude/directive-sync.json -> house_style)"
+    else
+      echo "not shipped at $head, not compared: templates/styles/components.js"
+    fi
     if grep -qxF templates/styles/tokens.css <<<"$shipped"; then
       check_tokens styles/tokens.css templates/styles/tokens.css
     else

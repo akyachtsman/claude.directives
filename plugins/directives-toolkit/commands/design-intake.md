@@ -9,8 +9,9 @@ style for every project (owner rulings, 2026-10-19), so this command adopts it;
 it never invents a look. Browser-only throughout.
 
 ## 1. Adopt the house style (default)
-Copy `templates/styles/tokens.css` and `templates/styles/components.css` from
-claude.directives into `styles/` unchanged, if `/new-repo` has not already, and
+Copy `templates/styles/tokens.css`, `templates/styles/components.css` and the
+shared page script `templates/styles/components.js` from claude.directives into
+`styles/` unchanged, if `/new-repo` has not already, and
 mark the project as on the house style (`design.md` → *Tokens & components*), creating
 the file as `{}` first if it is absent:
 
@@ -19,7 +20,7 @@ jq '.house_style = true' .claude/directive-sync.json > .claude/directive-sync.tm
   && mv .claude/directive-sync.tmp .claude/directive-sync.json
 ```
 
-From then on `/refresh-repo` keeps both files current. A project that already
+From then on `/refresh-repo` keeps the three files current. A project that already
 has its own stylesheets does not start here: it moves with 1c. A palette the
 owner ruled keeps its values (1b). The words, icons, components and patterns in
 `design.md` (sections 1 to 19) apply as they are.
@@ -81,7 +82,10 @@ already records; otherwise ask once.
 6. Install `templates/styles/components.css` verbatim at
    `styles/components.css`, loaded on every page after `tokens.css` and BEFORE
    the project's own stylesheets, so the project's own rules still win where
-   they overlap the house page base.
+   they overlap the house page base. Install `templates/styles/components.js`
+   verbatim at `styles/components.js` too, but load it on no page yet: it binds
+   page-wide (the `aria-disabled` guard, Esc, the declarative markup), so a
+   screen loads it when it moves (step 2), which keeps this step invisible.
 7. Screenshot again and compare. With the palette kept, every difference comes
    from the house page base (box-sizing, the body font and line height,
    headings, link colour, images, `[hidden]`, the form controls' font). Keep a
@@ -110,8 +114,9 @@ and the patterns in `design.md` (words, icons, archive and restore,
 confirmations, never a native `confirm()`), drops its `legacy-` classes and
 `legacy-screen`, and deletes the lines it fixes. Map by meaning, not by name:
 an old bare `.btn` that was filled is `.btn-primary` in the house set. Behaviour every page shares lives in one shared
-script (`design.md` → *Tokens & components*): use the project's own until the
-shared page script ships (#471).
+script (`design.md` → *Tokens & components*): a moved screen loads
+`styles/components.js` and calls `House.*`, and drops its own copy of what that
+covers (its dialog, its pop-over fit, its sort).
 
 **Step 3: finish.** When `git grep -n 'legacy-'` finds no use outside the
 legacy stylesheet, delete it and what loads it, and the emptied
@@ -120,8 +125,9 @@ live in its own stylesheet, never in `styles/components.css`.
 
 ## 2. Build the reference page
 One cleaned **reference page** (`index.html` or a representative screen) built
-only from `styles/tokens.css` + `styles/components.css`: semantic, plain
-HTML/CSS, no framework, no new classes, its content inside `.page`. It shows at least the buttons, a card
+only from `styles/tokens.css` + `styles/components.css`, with its behaviour
+from `styles/components.js` (`House.*`, never a page's own copy): semantic, plain
+HTML/CSS/JS, no framework, no new classes, its content inside `.page`. It shows at least the buttons, a card
 grid with its Add card, a form, a status pill of each colour, an empty state, a
 confirmation dialog and an Archived (N) pop-over, so the look-gate sees the
 whole standard on one page.
@@ -149,6 +155,6 @@ Record the look decisions (house style, or the ruling behind an imported palette
 then: "Next: `/sdd-loop` — it builds the remaining pages against
 `styles/tokens.css` + `styles/components.css`, so every page matches this one."
 
-Writes: `styles/tokens.css`, `styles/components.css`, the `house_style` marker
+Writes: `styles/tokens.css`, `styles/components.css`, `styles/components.js`, the `house_style` marker
 in `.claude/directive-sync.json`, the reference page, `specs/<slug>/design.md`;
 for a move (1c), also the renames, `styles/legacy.css` and `DESIGN-GAPS.md`.

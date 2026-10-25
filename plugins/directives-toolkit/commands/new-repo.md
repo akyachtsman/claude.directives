@@ -167,10 +167,11 @@ Execute in order:
    project replaces the task body with its real notification.
 
    **Design starter.** Copy `claude.directives/templates/styles/` (`tokens.css`,
-   `components.css`) into `styles/`. They are the house style and pass the
+   `components.css`, `components.js`) into `styles/`. They are the house style
+   (every page loads `styles/components.js`, the shared page script) and pass the
    contrast guardrail as-is; `/design-intake` keeps them, and changes token
    values only when the owner rules a project palette (per `directives/design.md`).
-   Mark the project as on the house style, so `/refresh-repo` keeps both files
+   Mark the project as on the house style, so `/refresh-repo` keeps the three files
    current: `"house_style": true` in `.claude/directive-sync.json`, with the
    `jq` line in step 1 of `/design-intake`, creating the file as `{}` if it is
    absent.

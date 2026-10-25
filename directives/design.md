@@ -34,8 +34,9 @@ How to use it:
   standard, or says in the PR why not, and deletes the line it fixes.
 
 ## Establishing your project's look
-Every project starts from the house look: `templates/styles/tokens.css` and
-`templates/styles/components.css`, which `/new-repo` copies into `styles/`.
+Every project starts from the house look: `templates/styles/tokens.css`,
+`templates/styles/components.css` and the shared page script
+`templates/styles/components.js`, which `/new-repo` copies into `styles/`.
 `/design-intake` (`/kickoff` calls it) adopts them, builds one approved
 **reference page** from them, and the remaining pages are built against that
 contract so every page matches page one.
@@ -48,7 +49,8 @@ never at refresh time. Three steps, each its own change:
    renamed `legacy-<name>` in its CSS, HTML and JS, so the old screens keep
    their exact look. The house `components.css` goes in at
    `styles/components.css`, verbatim, loaded before the project's own
-   stylesheets; `styles/tokens.css` declares every house token name; every
+   stylesheets, with the shared page script beside it at `styles/components.js`,
+   loaded by each screen as it moves; `styles/tokens.css` declares every house token name; every
    screen not yet on the house components gets its lines in `DESIGN-GAPS.md`;
    and the project is marked as on the house style (→ *Tokens & components*).
    Screenshots of every screen before and after are the proof.
@@ -94,21 +96,26 @@ Two committed files are the single source of truth for a project's look:
   page's content box (`.page`).
 
 A screen never adds its own button, card, pill or dialog class; a size or layout
-need is a modifier on the shared one. **Never edit `styles/components.css`:** it
-is the house file, kept current by `/refresh-repo`. A project's own modifiers and
-layout live in its own stylesheet (`styles/project.css`, say), loaded after it.
+need is a modifier on the shared one. **Never edit `styles/components.css` or
+`styles/components.js`:** they are the house files, kept current by
+`/refresh-repo`. A project's own modifiers and layout live in its own stylesheet
+(`styles/project.css`, say), loaded after it, and its page code in its own script.
 
 **The marker.** `.claude/directive-sync.json` → `"house_style": true` says this
-project's two files are the house's: `components.css` verbatim, and `tokens.css`
-declaring every house token name, with the project's values. `/new-repo`,
+project's files are the house's: `components.css` and `components.js` verbatim,
+and `tokens.css` declaring every house token name, with the project's values. `/new-repo`,
 `/design-intake` and the move above write it. On a marked project
-`/refresh-repo` keeps both current (components exactly, tokens by name) and
-requires both, and the contrast guardrail measures every house pair. An unmarked
+`/refresh-repo` keeps them current (components and script exactly, tokens by
+name) and requires each, and the contrast guardrail measures every house pair. An unmarked
 project's stylesheets are its own, and nothing compares them. Script behaviour that every page shares
 (the confirmation dialog, the archived pop-over, the ⋮ menu, the empty state, the inline
 message, the icon set, the table comparator, the segmented control's keys,
 the dialog's focus, the `aria-disabled` guard)
-lives in ONE shared script loaded by every page, never copied into a page.
+lives in ONE shared script loaded by every page, never copied into a page:
+**`styles/components.js`**, plain JS with no build, loaded with
+`<script src="styles/components.js" defer>` and called as `House.*` from page
+code that runs on `DOMContentLoaded`. Its header lists what it does, by section.
+A screen that needs one of these behaviours calls it; it never writes its own.
 Every generator is told to **use this project's `tokens.css` and `components.css`**, never to invent a parallel
 system.
 

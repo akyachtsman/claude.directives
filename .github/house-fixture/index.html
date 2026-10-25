@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>House script fixture</title>
+  <link rel="icon" href="data:,">
+  <!-- The house files exactly as a project gets them, read from templates/styles/. -->
+  <link rel="stylesheet" href="../../templates/styles/tokens.css">
+  <link rel="stylesheet" href="../../templates/styles/components.css">
+  <script src="../../templates/styles/components.js" defer></script>
+  <style>#bottom-tools { margin-top: 60vh; }</style>
+</head>
+<body>
+  <!-- The page .github/scripts/check-house-script.js drives: one of each thing
+       templates/styles/components.js does. It exists only for that check. -->
+  <main class="page">
+    <h1>House script fixture</h1>
+
+    <section aria-labelledby="h-guard">
+      <h2 id="h-guard">Buttons</h2>
+      <div class="toolbar">
+        <button type="button" class="btn" id="locked" aria-disabled="true" title="Only a manager can add items.">Add item</button>
+        <button type="button" class="btn" id="enabled">Count</button>
+        <button type="button" class="btn btn-icon" id="edit-icon" aria-label="Edit Walk-in fridge" title="Edit Walk-in fridge"><span data-icon="pencil"></span></button>
+        <button type="button" class="btn" id="save-busy">Save</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-confirm">
+      <h2 id="h-confirm">Confirmations</h2>
+      <div class="toolbar">
+        <button type="button" class="btn btn-danger" id="archive-one">Archive</button>
+        <button type="button" class="btn btn-primary" id="send">Send to everyone</button>
+        <button type="button" class="btn" id="rename">Rename</button>
+        <button type="button" class="btn" id="info">About</button>
+        <button type="button" class="btn" id="open-form">Edit details</button>
+        <button type="button" class="btn" id="open-native">Set a date</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-cards">
+      <h2 id="h-cards">Cards</h2>
+      <div class="grid">
+        <div class="card">
+          <button type="button" class="card-open card-title" id="open-fridge">Walk-in fridge</button>
+          <div class="card-sub">Cold storage</div>
+          <div class="card-actions">
+            <button type="button" class="btn btn-icon menu-btn" id="menu-btn" aria-label="More actions" title="More actions" aria-controls="menu-1"><span data-icon="more-vertical"></span></button>
+            <div class="menu-pop" id="menu-1">
+              <button type="button" class="menu-item" id="mi-edit">Edit</button>
+              <button type="button" class="menu-item danger" id="mi-archive">Archive</button>
+              <button type="button" class="menu-item" id="mi-dup">Duplicate</button>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="card card-add">+ Add item</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-table">
+      <h2 id="h-table">Table</h2>
+      <div class="table-wrap">
+        <table class="table" id="tbl">
+          <thead><tr>
+            <th scope="col"><button type="button" class="th-sort">Name</button></th>
+            <th scope="col"><button type="button" class="th-sort">Count</button></th>
+            <th scope="col">Note</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Item 10</td><td>1,250</td><td>a</td></tr>
+            <tr><td>item 2</td><td></td><td>b</td></tr>
+            <tr><td>Apple</td><td>9</td><td>c</td></tr>
+            <tr><td></td><td>40</td><td>d</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-tabs">
+      <h2 id="h-tabs">Segmented control</h2>
+      <div class="segmented" role="tablist" aria-label="View" id="tabs">
+        <button type="button" role="tab" id="t-live" aria-controls="p-live" aria-selected="true">Live</button>
+        <button type="button" role="tab" id="t-arch" aria-controls="p-arch">Archived</button>
+        <button type="button" role="tab" id="t-all" aria-controls="p-all">All</button>
+      </div>
+      <div role="tabpanel" id="p-live" aria-labelledby="t-live">Live things</div>
+      <div role="tabpanel" id="p-arch" aria-labelledby="t-arch">Archived things</div>
+      <div role="tabpanel" id="p-all" aria-labelledby="t-all">All things</div>
+    </section>
+
+    <section aria-labelledby="h-msg">
+      <h2 id="h-msg">Messages and empty state</h2>
+      <div class="field">
+        <label class="label" for="name-field">Name</label>
+        <input class="input" id="name-field" type="text">
+      </div>
+      <div id="empty-host"></div>
+    </section>
+
+    <!-- A page's own dialog markup, opened through House.dialog.open. -->
+    <div class="dialog-backdrop" id="form-dialog" hidden>
+      <div class="dialog">
+        <div class="dialog-header">
+          <h2 class="dialog-title">Edit details</h2>
+          <button type="button" class="btn btn-icon" aria-label="Close" title="Close"><span data-icon="x"></span></button>
+        </div>
+        <div class="dialog-body">
+          <div class="field">
+            <label class="label" for="detail-field">Details</label>
+            <input class="input" id="detail-field" type="text">
+          </div>
+          <button type="button" class="btn" id="nested">Archive details</button>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button>
+          <button type="button" class="btn btn-primary" id="form-save">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <dialog class="dialog" id="native-dialog">
+      <div class="dialog-header">
+        <h2 class="dialog-title">Set a date</h2>
+        <button type="button" class="btn btn-icon" aria-label="Close" title="Close"><span data-icon="x"></span></button>
+      </div>
+      <div class="dialog-body">
+        <div class="field">
+          <label class="label" for="date-field">Date</label>
+          <input class="input" id="date-field" type="date">
+        </div>
+        <button type="button" class="btn" id="native-nested">Clear the date</button>
+      </div>
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button>
+        <button type="button" class="btn btn-primary">Save</button>
+      </div>
+    </dialog>
+
+    <!-- At the end of the page, so its pop-over must open upward. -->
+    <div class="toolbar" id="bottom-tools">
+      <div id="archived-host" class="toolbar-add"></div>
+    </div>
+  </main>
+  <script>
+    // Page code runs on DOMContentLoaded: a deferred components.js has run by then.
+    window.log = [];
+    document.addEventListener('DOMContentLoaded', () => {
+      const $ = id => document.getElementById(id);
+      const note = v => window.log.push(v);
+      $('locked').addEventListener('click', () => note('locked'));
+      $('enabled').addEventListener('click', () => note('enabled'));
+      $('save-busy').addEventListener('click', () => {
+        const done = House.busy($('save-busy'), 'Saving…');
+        window.finishSave = done;
+      });
+      $('archive-one').addEventListener('click', async () => {
+        note('archive:' + await House.confirm({ title: 'Archive Walk-in fridge?', body: 'You can restore it from Archived.', confirm: 'Archive', kind: 'danger' }));
+      });
+      $('send').addEventListener('click', async () => {
+        note('send:' + await House.confirm({ title: 'Send to everyone?', body: 'Everyone gets this message now.', confirm: 'Send' }));
+      });
+      $('rename').addEventListener('click', async () => {
+        note('rename:' + await House.ask({ title: 'Rename Walk-in fridge', label: 'Name', value: 'Walk-in fridge', required: true }));
+      });
+      $('info').addEventListener('click', async () => {
+        await House.notice({ title: 'About', body: 'This page tests the house script.' });
+        note('notice');
+      });
+      $('open-form').addEventListener('click', async () => {
+        note('form:' + await House.dialog.open($('form-dialog')));
+      });
+      $('form-save').addEventListener('click', () => House.dialog.close($('form-dialog'), $('detail-field').value));
+      $('nested').addEventListener('click', async () => {
+        note('nested:' + await House.confirm({ title: 'Archive details?', confirm: 'Archive', kind: 'danger' }));
+      });
+      $('native-nested').addEventListener('click', async () => {
+        note('native-nested:' + await House.confirm({ title: 'Clear the date?', confirm: 'Clear', kind: 'danger' }));
+      });
+      $('open-native').addEventListener('click', async () => {
+        note('native:' + await House.dialog.open($('native-dialog')));
+      });
+      for (const id of ['mi-edit', 'mi-archive', 'mi-dup']) $(id).addEventListener('click', () => note('menu:' + id));
+      $('mi-archive').addEventListener('click', async () => {
+        note('menu-confirm:' + await House.confirm({ title: 'Archive Walk-in fridge?', confirm: 'Archive', kind: 'danger' }));
+      });
+      $('tabs').addEventListener('house:select', e => note('tab:' + e.detail.tab.id));
+      window.restoreFails = false;
+      window.delays = {};
+      const items = Array.from({ length: 30 }, (_, i) => ({ id: i, name: i === 0 ? 'A very long archived name that must wrap inside the pop-over and never be cut short' : 'Archived thing ' + i }));
+      window.archivedHandle = House.archived($('archived-host'), {
+        items,
+        onRestore: item => new Promise((resolve, reject) => setTimeout(() => (window.restoreFails ? reject(new Error('x')) : resolve(note('restored:' + item.id))), window.delays[item.id] || 50)),
+      });
+    });
+  </script>
+</body>
+</html>

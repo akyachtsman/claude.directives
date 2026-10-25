@@ -107,16 +107,18 @@ KITS
   return 1
 }
 
-# The house style (#470): on a project marked as on it, styles/components.css is
-# a verbatim drop-in like the rest, so it joins the loop; styles/tokens.css is
+# The house style (#470): on a project marked as on it, styles/components.css and
+# the shared page script styles/components.js (#471) are verbatim drop-ins like
+# the rest, so they join the loop (a pin that predates the script reads it as
+# NO-TEMPLATE); styles/tokens.css is
 # checked by token NAME after the loop, because its values are the project's.
 house=no
 refresh_house_style && house=yes
 house_cmp=
-[ "$house" = yes ] && house_cmp=styles/components.css
+[ "$house" = yes ] && house_cmp="styles/components.css styles/components.js"
 
 n=0 same=0 stale=0 custom=0 drift=0 modes=0
-# shellcheck disable=SC2086  # $house_cmp is one path or nothing
+# shellcheck disable=SC2086  # $house_cmp is two paths or nothing
 for f in .github/workflows/*.yml .github/actions/*/* \
          .claude/hooks/session-start.sh .github/scripts/* \
          .github/workflow-ref-required.json .github/ui-suite-env-exempt.json $house_cmp; do
@@ -220,7 +222,7 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     custom=$((custom + 1))
   fi
 done
-# The house style, after the loop (#470). A marked project REQUIRES both files:
+# The house style, after the loop (#470). A marked project REQUIRES its files:
 # the marker says they are the house's, so an absent one is a gap to fill, not
 # a piece the project never installed. tokens.css is compared by token name
 # only (refresh-lib.sh -> refresh_token_names): a palette the owner ruled keeps
@@ -230,6 +232,10 @@ done
 if [ "$house" = yes ]; then
   [ -f styles/components.css ] \
     || echo "MISSING: styles/components.css -- this project is on the house style (.claude/directive-sync.json -> house_style), so it is required; install templates/styles/components.css"
+  # Required only where the pin ships it: a pin from before #471 has no script.
+  if git -C "$up" cat-file -e "$pin:templates/styles/components.js" 2>/dev/null && [ ! -f styles/components.js ]; then
+    echo "MISSING: styles/components.js -- this project is on the house style, so the shared page script is required; install templates/styles/components.js"
+  fi
   if ! git -C "$up" cat-file -e "$pin:templates/styles/tokens.css" 2>/dev/null; then
     echo "NO-TEMPLATE: templates/styles/tokens.css is not shipped at $pin -- styles/tokens.css not compared"
   elif [ ! -f styles/tokens.css ]; then

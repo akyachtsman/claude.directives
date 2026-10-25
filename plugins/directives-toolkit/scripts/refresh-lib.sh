@@ -64,15 +64,17 @@ refresh_template_of() {
     .github/actions/*)   printf 'templates/actions/%s\n' "${1#.github/actions/}" ;;
     .github/scripts/*)   printf 'templates/scripts/%s\n' "${1#.github/scripts/}" ;;
     .claude/hooks/*)     printf 'templates/claude-hooks/%s\n' "${1#.claude/hooks/}" ;;
-    # The two house-style files only (#470): a project's own stylesheet beside
-    # them (styles/legacy.css, styles/project.css) has no template.
-    styles/tokens.css | styles/components.css) printf 'templates/%s\n' "$1" ;;
+    # The house-style files only (#470; the shared page script, #471): a
+    # project's own stylesheet or script beside them (styles/legacy.css,
+    # styles/project.css) has no template.
+    styles/tokens.css | styles/components.css | styles/components.js) printf 'templates/%s\n' "$1" ;;
   esac
 }
 
 # refresh_house_style: exit 0 when THIS project is on the house style, i.e.
 # .claude/directive-sync.json -> house_style is exactly `true` (#470). The
-# marker means styles/components.css is the house file, verbatim, and
+# marker means styles/components.css and styles/components.js (the shared page
+# script, #471) are the house files, verbatim, and
 # styles/tokens.css declares every house token name with the project's values.
 # /new-repo, /design-intake and the existing-project move write it. Anything
 # else (no file, no key, false, "true") is a project not yet moved: its

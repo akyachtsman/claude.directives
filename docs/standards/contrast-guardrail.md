@@ -24,6 +24,21 @@ names. That derivation is also incomplete: it cannot see text that sets a colour
 and inherits its background. Only resolving each element's effective background
 through the cascade would be complete, and no tool here does that.
 
+**The control edge is measured on the house style, and wherever it is declared.**
+Besides the nine text and button pairs, the guardrail checks a form field's edge —
+`--color-border-input` on `--color-surface` and on `--color-bg`, at 3:1 (WCAG
+1.4.11; #470). A project marked as on the house style — `.claude/directive-sync.json`
+containing `"house_style": true`, meaning its `styles/tokens.css` and
+`styles/components.css` are the house files — must declare the token: a missing
+one fails the run like any other required token, and the count reads `11/11`.
+An unmarked project is measured when a tokens file declares the token, and
+otherwise keeps its `9/9`, with one line saying the control-edge pairs were not
+measured and why — so a project still on the older starter `tokens.css`, which
+has no such token, stays green. Only the literal `true` marks; a sync file that
+is not valid JSON counts as unmarked and the run says so. The token is a
+*measured* token either way, so the placement and one-declaration rules below
+apply to it in every project.
+
 **One declaration per measured token, in `#hex`.** The guardrail reads
 declarations, not the cascade, so a token declared twice left it measuring
 whichever came last — and saying nothing about the other. Appending one line to

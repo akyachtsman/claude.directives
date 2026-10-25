@@ -114,7 +114,8 @@ Over git transport, at the pinned head. Per file it prints one of:
 - **`MODE`** — the executable bit differs from the template's git mode
   (`100755` / `100644`). Informational, never `DRIFT` on its own; restore the
   bit unless the project records why it differs.
-- `NO-TEMPLATE`, `CANNOT-VERIFY`, `RETIRED` — below — then one `SUMMARY` line.
+- `NO-TEMPLATE`, `CANNOT-VERIFY`, `RETIRED` — below — then the house-style
+  lines (*The house style* below) and one `SUMMARY` line.
 - **`RE-RECORD`** — after `SUMMARY`, only when there are any: the count and
   paths of every `refresh_kept` file record whose `local` blob is missing or is
   no longer the file's, **kit files included** (the `CUSTOM` lines reach only
@@ -158,6 +159,19 @@ points; a name `templates/ui-tests/` ships, so a kit AT `.github/scripts` leaves
 the standard scripts beside it compared) are not compared here; the kit is covered by *Kit defects* and Phase 2's
 per-file kit diffs (pilot claude.prop, 2026-10-13: five script templates in the
 delta had to be classified by hand).
+
+**The house style** (#470), only on a project marked as on it
+(`.claude/directive-sync.json` → `"house_style": true`, which `/new-repo`,
+`/design-intake` and the existing-project move write): `styles/components.css`
+and the shared page script `styles/components.js` (#471) join the comparison
+above as verbatim drop-ins, and `styles/tokens.css` gets a
+`TOKENS:` line, by token NAME only, since its values are the project's (a palette
+the owner ruled). A marked project requires each of them, so an absent one
+prints `MISSING:` (`components.js` only where the pin ships it). An unmarked project prints one `HOUSE-STYLE: not marked` line and
+nothing in `styles/` is compared: an older starter `tokens.css`/`components.css`
+cannot be told from a customised house one, and moving an existing project is
+`/design-intake`'s, never a refresh's. A project's own stylesheet beside them
+(`styles/legacy.css`, `styles/project.css`) has no template and stays silent.
 
 `.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
 `ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
@@ -365,12 +379,14 @@ project** — map each to its installed location before dispositioning:
 | `templates/scripts/*` | `.github/scripts/*` | Phase 1.5 has already classified each installed one: take a `STALE` script; diff and confirm a `CUSTOM` or `DRIFT` one — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge, through *Settings writes* (Phase 1.5). Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
+| `templates/styles/*` | `styles/*` | **Only on a project marked as on the house style** (`house_style: true`; Phase 1.5). `components.css` and the shared page script `components.js` are verbatim drop-ins: the project never edits them, and its own rules and page code live in its own files loaded after them (`design.md` → *Tokens & components*), so take the template; a `CUSTOM` one gets the diff treatment. `tokens.css` keeps the project's values and takes every token NAME the template adds: `refresh-merge.sh styles/tokens.css` brings a new name with the house value, then a ruled palette sets its own. All three are required when absent, every run (the skip rule's third exception). Never a reason to restyle a screen: a screen that does not match goes into `DESIGN-GAPS.md`. An unmarked project is not compared and not moved here |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
 | `directives/*`, `docs/*`, `plugins/*` | not installed — read live / delivered by the plugin | Informational; no local file to update |
 
 Skip rows whose local path doesn't exist (the project never installed that piece)
-— with TWO exceptions, both for the same reason: a file another installed file
-names by path is not optional, and skipping it ships a broken reference.
+— with THREE exceptions, all for the same reason: a file another installed file
+names by path, or the project's own record says it has, is not optional, and
+skipping it ships a broken reference.
 - the `claude-hooks` row, whose whole purpose is first installation and whose
   absence breaks the settings row that references it;
 - the **workflow-, composite-, OR directive-referenced** entries of the
@@ -381,6 +397,10 @@ names by path is not optional, and skipping it ships a broken reference.
   **documented command** for one only a directive names (`browser-ladder.js`,
   named by `test.md`). Deriving a path is not installing it: the derivation
   below and this exception must name the same set.
+- the `templates/styles/*` row on a project marked as on the house style: the
+  marker says the files are the house's, so an absent one is installed, never
+  skipped. An unmarked project has no such record, and its row is skipped
+  whatever exists.
 
 ### Workflow refresh rules
 
@@ -840,9 +860,17 @@ What is compared, delta or not:
   one value does not cover the next (Codex, #404). A missing local `.claude/settings.json` is reported, not
   compared; an unreadable one refuses the stamp.
 
+- **the house style, every run, on a marked project** (#470):
+  `styles/components.css` and `styles/components.js` exactly, like a delta path; `styles/tokens.css` by
+  token name, so a ruled palette passes as it is and a name the template
+  declares that the file lacks is `UNAPPLIED`, listed. A deliberate decline (a
+  project whose tokens live elsewhere, say) is a `refresh_kept` record bound to
+  both blobs, as for any file, and reads as `KEPT`. An unmarked project prints
+  `not on the house style` and is not compared.
+
 An absent path is required where the skip rule makes it so: a dependency above,
 a file of an installed composite, the hook once `.claude/settings.json` exists,
-a file of an installed kit. Any other absent path is reported, not compared:
+a file of an installed kit, either house-style file on a marked project. Any other absent path is reported, not compared:
 an absent workflow can be deliberate (`pages-deploy.yml`, a scheduled workflow
 with no task), and a path upstream does not ship is the project's own. A path
 the upstream deleted counts as unapplied while a local copy remains.

@@ -105,6 +105,42 @@ kit_dir_kept() {
   return 1
 }
 
+# kept_reason <local> <blob> <local blob>: print the reason of the refresh_kept
+# record that binds this path to BOTH blobs, cut to 60 characters, if one does.
+# check() and check_tokens() read records the one way (see check() for why).
+kept_reason() {
+  jq -r --arg p "$1" --arg b "$2" --arg l "$3" \
+    '.refresh_kept[$p] | select(type == "object" and .blob == $b and .local == $l and $l != "")
+     | .reason // empty | select(type == "string" and test("\\S"))
+     | if length > 60 then .[0:60] + "..." else . end' \
+    .claude/directive-sync.json 2>/dev/null
+}
+
+# check_tokens <local> <template>: the house tokens.css on a marked project
+# (#470). Not a byte comparison: the values are the project's (a palette the
+# owner ruled), so what must hold is that every token NAME the template declares
+# is declared locally (refresh-lib.sh -> refresh_token_names). A name upstream
+# added and the project lacks would leave var(--that) unset in the house
+# components.css, which the project takes verbatim. Required when absent, like
+# a composite's file; a refresh_kept record bound to both blobs declines it.
+check_tokens() {
+  handled="$handled$1 "
+  local b lb kept lacks
+  b=$(git -C "$up" rev-parse "$head:$2" 2>/dev/null) || b=
+  if [ -e "$1" ]; then lb=$(git hash-object --no-filters -- "$1" 2>/dev/null) || lb=; else lb=absent; fi
+  kept=$(kept_reason "$1" "$b" "$lb") || kept=
+  if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
+  if [ ! -e "$1" ]; then
+    echo "UNAPPLIED: $1 is absent but required -- the project is on the house style (.claude/directive-sync.json -> house_style) (blob $b) (local $lb)"
+    unapplied=1; return
+  fi
+  lacks=$(LC_ALL=C comm -23 <(git -C "$up" cat-file blob "$b" 2>/dev/null | refresh_token_names) \
+                            <(refresh_token_names <"$1") | paste -sd ' ' -)
+  [ -n "$lacks" ] || return
+  echo "UNAPPLIED: $1 lacks house token name(s) $2 declares at $head: $lacks -- add each (the value is the project's) (blob $b) (local $lb)"
+  unapplied=1
+}
+
 # check <local> <template> <why it is required> [<kit dir>]: compare one
 # installed copy, honouring a blob-bound reason -- or, for a kit file (the
 # fourth argument names its kit), a tree-bound one on a directory above it.
@@ -125,11 +161,7 @@ check() {
   # never after core.autocrlf or a clean filter, which can map two different
   # files to one id (Codex, #451).
   if [ -e "$1" ]; then lb=$(git hash-object --no-filters -- "$1" 2>/dev/null) || lb=; else lb=absent; fi
-  kept=$(jq -r --arg p "$1" --arg b "$b" --arg l "$lb" \
-    '.refresh_kept[$p] | select(type == "object" and .blob == $b and .local == $l and $l != "")
-     | .reason // empty | select(type == "string" and test("\\S"))
-     | if length > 60 then .[0:60] + "..." else . end' \
-    .claude/directive-sync.json 2>/dev/null) || kept=
+  kept=$(kept_reason "$1" "$b" "$lb") || kept=
   if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
   if [ -n "${4:-}" ] && [ "$b" != deleted ] && kept=$(kit_dir_kept "$4" "$2"); then
     echo "KEPT: $1 -- $kept"; return
@@ -189,6 +221,7 @@ KITS
       templates/scripts/*)      p=".github/scripts/${t#templates/scripts/}"; need= ;;   # dependency pass decides absence
       templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}"
                                 need=; [ -f .claude/settings.json ] && need="the settings row runs it" ;;
+      templates/styles/*) continue ;;   # pass 4 below, every run, marked projects only
       *) continue ;;   # merged, written once, or not installed: see the table above
     esac
     if [ "$st" = D ]; then
@@ -368,6 +401,34 @@ SETTINGS
 $extra
 EXTRA
     fi
+  fi
+
+  # 4. The house style (#470), every run, delta or not -- like the settings
+  # pass, because neither file waits for upstream to change it: a project that
+  # deleted one, or moved before a token was added, is broken today. Only a
+  # project MARKED as on it (refresh-lib.sh -> refresh_house_style): an older
+  # starter copy cannot be told from a customised house one, and moving a
+  # project is /design-intake's, never a refresh's.
+  if refresh_house_style; then
+    if grep -qxF templates/styles/components.css <<<"$shipped"; then
+      check styles/components.css templates/styles/components.css \
+        "the project is on the house style (.claude/directive-sync.json -> house_style)"
+    else
+      echo "not shipped at $head, not compared: templates/styles/components.css"
+    fi
+    if grep -qxF templates/styles/components.js <<<"$shipped"; then
+      check styles/components.js templates/styles/components.js \
+        "the project is on the house style (.claude/directive-sync.json -> house_style)"
+    else
+      echo "not shipped at $head, not compared: templates/styles/components.js"
+    fi
+    if grep -qxF templates/styles/tokens.css <<<"$shipped"; then
+      check_tokens styles/tokens.css templates/styles/tokens.css
+    else
+      echo "not shipped at $head, not compared: templates/styles/tokens.css"
+    fi
+  else
+    echo "not on the house style (.claude/directive-sync.json -> house_style is not true): styles/ not compared"
   fi
 fi
 [ -n "$up" ] && rm -rf "$up"

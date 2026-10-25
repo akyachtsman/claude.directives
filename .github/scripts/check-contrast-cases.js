@@ -26,6 +26,15 @@
 //   CHECK_CONTRAST_BIN=/tmp/mutant.js node .github/scripts/check-contrast-cases.js
 //
 // Run: node .github/scripts/check-contrast-cases.js
+//
+// #470, 2026-10-25: the control-edge pairs (--color-border-input on surface and
+// bg, 3:1) and the house-style marker that makes them required. Measured
+// against the guard as it was before the change (git show HEAD:… > mutant,
+// CHECK_CONTRAST_BIN=mutant): 19 of the 20 new cases, plus the re-pinned
+// shipped-tokens case, fail against it (20 failures of 145, from 125 cases
+// before). The one that passes is the legacy twin pinning that an unmarked
+// file without the token keeps its 9/9 — the count that must NOT change, so it
+// is meant to pass on both.
 
 // ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
 // CLAUDE.md now keeps a one-line purpose per gate command; the history and
@@ -91,6 +100,21 @@ const DARK = `:root {
 `;
 
 const OK9 = 'OK — 9/9 assumed pairs meet WCAG AA';
+// #470: the nine plus the two control-edge pairs.
+const OK11 = 'OK — 11/11 assumed pairs meet WCAG AA';
+const EDGE_SKIPPED = 'control-edge pairs not measured in styles/tokens.css';
+const EDGE_REQUIRED = 'so the control-edge\n  pairs are required';
+// The house-style marker, at the project root the guard runs from.
+const SYNC = '.claude/directive-sync.json';
+const MARKED = { [SYNC]: JSON.stringify({ upstream: { sha: 'x' }, house_style: true }) + '\n' };
+// BASE with the control-edge token: #8C887F is 3.53 on #FFFFFF and 3.29 on
+// #F5F7FA, so both 3:1 pairs pass — a failing value would make the marked cases
+// red for a reason other than the one each pins.
+const EDGE_LINE = '  --color-border-input:   #8C887F;\n';
+const WITH_EDGE = swap(BASE, '  --color-on-accent:      #FFFFFF;\n', '  --color-on-accent:      #FFFFFF;\n' + EDGE_LINE);
+// #A0A0A0 is 2.61 on white (2.44 on the bg): under 3:1, while every other pair still passes.
+const WEAK_EDGE = swap(WITH_EDGE, '#8C887F', '#A0A0A0');
+const DARK_WITH_EDGE = swap(DARK, '  --color-on-accent:      #10131A;\n', '  --color-on-accent:      #10131A;\n  --color-border-input:   #7A8090;\n');
 const DUP = 'a measured token is declared more than once';
 const BLOCK = 'value is a { } block';
 // #337 round 9: the one place a measured token may be declared.
@@ -106,7 +130,95 @@ const CASES = [
   // The shipped contract must satisfy its own guardrail. This is the one case
   // that reads templates/styles/ — a starter kit that fails the gate it ships
   // beside is a bootstrap that cannot go green on day one.
-  ['the shipped starter tokens.css', { __shipped: true }, 0, OK9],
+  // #470: the house file declares --color-border-input, so even with no marker
+  // (this fixture has no .claude/) the control-edge pairs are measured: 11/11.
+  ['the shipped starter tokens.css', { __shipped: true }, 0, OK11],
+
+  ['the shipped starter tokens.css on a marked project', { __shipped: true, ...MARKED }, 0, OK11],
+
+  // ── #470: the control edge, and the marker that makes it required ─────────
+  // A field's border carries WCAG 1.4.11's 3:1. Required on the house style
+  // (.claude/directive-sync.json → "house_style": true); otherwise measured
+  // when the file declares the token and left out — with a line — when not.
+  ['marked, control-edge token present and passing',
+    { 'styles/tokens.css': WITH_EDGE, ...MARKED }, 0, OK11],
+
+  ['marked, control-edge token missing fails like any required token',
+    { 'styles/tokens.css': BASE, ...MARKED }, 1, EDGE_REQUIRED],
+
+  // The count names the pair list the run used, so a missing token reads 9/11.
+  ['…and the count says eleven were required',
+    { 'styles/tokens.css': BASE, ...MARKED }, 1, 'only 9/11 pairs were evaluable'],
+
+  ['marked, control-edge token below 3:1 on the surface fails',
+    { 'styles/tokens.css': WEAK_EDGE, ...MARKED }, 1, 'FAIL  border-input / surface (control edge)'],
+
+  ['marked, control-edge token in non-hex form is not evaluable',
+    { 'styles/tokens.css': swap(WITH_EDGE, '#8C887F', 'rgb(140 136 127)'), ...MARKED },
+    1, 'Declared, but not in #hex form: --color-border-input'],
+
+  // The legacy twin, and the one that must pass against the old guard too: no
+  // marker, no token — the run is the nine it always was. (The baseline case
+  // at the top pins the same 9/9 with no marker file at all.)
+  ['unmarked, token absent: the count stays 9/9',
+    { 'styles/tokens.css': BASE, [SYNC]: '{ "upstream": { "sha": "x" } }\n' }, 0, OK9],
+
+  ['unmarked, token absent: one line says the pairs were not measured and why',
+    { 'styles/tokens.css': BASE }, 0, EDGE_SKIPPED],
+
+  // Unmarked but declared: a project that adopted the role is held to it.
+  ['unmarked, token declared: the control-edge pairs are measured',
+    { 'styles/tokens.css': WITH_EDGE }, 0, OK11],
+
+  ['unmarked, token declared below 3:1 fails',
+    { 'styles/tokens.css': WEAK_EDGE }, 1, 'FAIL  border-input / surface (control edge)'],
+
+  ['unmarked, token declared in non-hex form is not skipped',
+    { 'styles/tokens.css': swap(WITH_EDGE, '#8C887F', 'oklch(0.6 0.01 80)') },
+    1, 'Declared, but not in #hex form: --color-border-input'],
+
+  // The token is MEASURED whether or not the project is marked, so "declared"
+  // has one answer: a declaration CSS may not apply is refused, never read as
+  // "not declared" and skipped.
+  ['unmarked, token only in a theme-attribute rule is refused, not skipped',
+    { 'styles/tokens.css': plus('[data-theme="dark"] { --color-border-input: #C8C8C8; }\n') }, 1, ROOT],
+
+  ['unmarked, token declared twice with different values is refused',
+    { 'styles/tokens.css': plus(':root { --color-border-input: #8C887F; }\n:root { --color-border-input: #C8C8C8; }\n') },
+    1, DUP],
+
+  // Only the literal boolean true marks.
+  ['"house_style": false is unmarked',
+    { 'styles/tokens.css': BASE, [SYNC]: '{ "house_style": false }\n' }, 0, EDGE_SKIPPED],
+
+  ['"house_style": "true" (a string) is unmarked',
+    { 'styles/tokens.css': BASE, [SYNC]: '{ "house_style": "true" }\n' }, 0, EDGE_SKIPPED],
+
+  // A sync file that is not JSON: treated as unmarked, said out loud (the
+  // choice and why: check-contrast.js, readHouseStyleMarker()).
+  ['an unreadable marker file is unmarked, and says so',
+    { 'styles/tokens.css': BASE, [SYNC]: '{ "house_style": true,\n' }, 0, 'could not be read as JSON'],
+
+  // …and unmarked is not "skip": a declared token is still measured.
+  ['an unreadable marker file does not stop a declared token being measured',
+    { 'styles/tokens.css': WEAK_EDGE, [SYNC]: 'not json\n' }, 1, 'FAIL  border-input / surface (control edge)'],
+
+  // The marker is per PROJECT, the declaration per FILE: marked, every theme
+  // file must carry the token; unmarked, the one without it is left out alone.
+  ['marked themed project: a theme file without the token fails',
+    { 'styles/light.css': WITH_EDGE, 'styles/dark.css': DARK, ...MARKED,
+      __candidates: ['styles/light.css', 'styles/dark.css'] },
+    1, 'styles/dark.css: only 9/11 pairs were evaluable'],
+
+  ['unmarked themed project: only the file without the token skips the pairs',
+    { 'styles/light.css': WITH_EDGE, 'styles/dark.css': DARK,
+      __candidates: ['styles/light.css', 'styles/dark.css'] },
+    0, 'control-edge pairs not measured in styles/dark.css'],
+
+  ['marked themed project with the token in every file passes',
+    { 'styles/light.css': WITH_EDGE, 'styles/dark.css': DARK_WITH_EDGE, ...MARKED,
+      __candidates: ['styles/light.css', 'styles/dark.css'] },
+    0, 'OK — 11/11 assumed pairs meet WCAG AA in styles/dark.css'],
 
   // ── #334's repro, verbatim ────────────────────────────────────────────────
   // CSS applies the rgb(); before the fix the gate measured #1565C0 and printed

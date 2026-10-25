@@ -196,20 +196,30 @@
      the button's start (Archived) or end (⋮), then moved sideways to stay 8px
      inside the window; a list longer than the room scrolls inside it. The
      pop-over is position: fixed (components.css), so no sidebar or card edge
-     clips it. */
+     clips it. "The window" is the VISUAL viewport where the browser has one: on
+     an iPhone the on-screen keyboard shrinks only window.visualViewport, so a
+     pop-over opened from a field would otherwise land under the keyboard. Its
+     offsets are in the same layout-viewport coordinates as
+     getBoundingClientRect() and position: fixed. */
   const GAP = 8;
+  function visible() {
+    const vv = window.visualViewport;
+    if (vv) return { x: vv.offsetLeft, y: vv.offsetTop, w: vv.width, h: vv.height };
+    const de = document.documentElement;
+    return { x: 0, y: 0, w: de.clientWidth, h: de.clientHeight };
+  }
   function fit(pop, anchor, { align = 'start' } = {}) {
     pop.style.maxHeight = '';
     pop.style.width = '';
     pop.style.left = '0px';
     pop.style.top = '0px';
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
+    const v = visible();
+    const vw = v.w;
     const a = anchor.getBoundingClientRect();
     const w = Math.min(pop.offsetWidth, vw - 2 * GAP);
     const h = pop.offsetHeight;
-    const below = vh - a.bottom - 2 * GAP;
-    const above = a.top - 2 * GAP;
+    const below = v.y + v.h - a.bottom - 2 * GAP;
+    const above = a.top - v.y - 2 * GAP;
     let top;
     if (h <= below || below >= above) {
       const room = Math.max(below, 0);
@@ -221,7 +231,7 @@
       top = a.top - GAP - Math.min(h, room);
     }
     let left = align === 'end' ? a.right - w : a.left;
-    left = Math.max(GAP, Math.min(left, vw - GAP - w));
+    left = Math.max(v.x + GAP, Math.min(left, v.x + vw - GAP - w));
     pop.style.width = pop.offsetWidth > vw - 2 * GAP ? `${w}px` : '';
     pop.style.left = `${Math.round(left)}px`;
     pop.style.top = `${Math.round(top)}px`;
@@ -273,6 +283,11 @@
   const refitAll = () => { for (const d of openPops) d.refit(); };
   window.addEventListener('resize', refitAll);
   window.addEventListener('scroll', refitAll, true);
+  // The keyboard opening or closing, and a pinch zoom, move only the visual viewport.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', refitAll);
+    window.visualViewport.addEventListener('scroll', refitAll);
+  }
 
   /* ── §5 The ⋮ menu: a disclosure of native buttons, not an ARIA menu ─────────
      Markup: <button class="btn btn-icon menu-btn" aria-label="More actions"

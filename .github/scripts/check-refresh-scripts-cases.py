@@ -30,7 +30,31 @@ MUTANTS. Each script is swapped by its own variable, copied into a temp
 directory beside the real siblings it sources or runs (the installed layout):
 REFRESH_STAMP_BIN, REFRESH_DELTA_BIN, REFRESH_DRIFT_BIN, REFRESH_MERGE_BIN,
 REFRESH_CALLERS_BIN, REFRESH_BROKEN_REFS_BIN, REFRESH_HOOK_INSTALL_BIN,
-KIT_DEFECTS_BIN, REFRESH_VARS_BIN, REFRESH_LIB_BIN.
+KIT_DEFECTS_BIN, REFRESH_VARS_BIN, REFRESH_LIB_BIN, HOUSE_STYLE_INVENTORY_BIN.
+
+THE HOUSE STYLE (#470, 2026-10-25). A project marked as on the house style
+(.claude/directive-sync.json -> house_style: true) has styles/components.css
+compared verbatim and styles/tokens.css by token name, every run, in drift and
+the stamp; an unmarked one compares nothing in styles/. MEASURED 2026-10-25,
+each pre-change script swapped in alone (09ace64): REFRESH_DRIFT_BIN -> the 10
+house drift cases; REFRESH_STAMP_BIN -> the 8 house stamp cases that refuse or
+print a line (the clean stamp and the KEPT ones hold trivially, since the old
+stamp compared nothing); REFRESH_LIB_BIN -> 17 (the drift and stamp cases that
+need refresh_house_style, and both merge cases, which need
+refresh_template_of to map styles/). Then the new lib with one feature
+reverted: comments kept in refresh_token_names -> the commented-out-token
+case; the marker read as truthy rather than exactly true -> the "true"-string
+case. house-style-inventory.sh is new, so HOUSE_STYLE_INVENTORY_BIN = an empty
+file -> all 5 inventory cases.
+
+THE SHARED PAGE SCRIPT (#471, 2026-10-25). styles/components.js is the third
+house file: verbatim, required on a marked project where the pin ships it
+(the fixture ships it from the head only, so a pin at the stamp predates it).
+MEASURED against the scripts at 03c55c3, each swapped in alone:
+REFRESH_DRIFT_BIN -> the MISSING and the local-edit drift cases;
+REFRESH_STAMP_BIN -> the not-taken and the absent stamp cases;
+REFRESH_LIB_BIN -> the local-edit drift case (no template mapping, so the
+loop reads the script as NO-TEMPLATE).
 
 MEASURED 2026-10-13 against the pre-fix scripts (100d6b4, with only the
 hard-coded upstream URL replaced by ${REFRESH_UPSTREAM:-...} so they could be
@@ -195,6 +219,7 @@ BINS = {
     "kit-defects.sh": "KIT_DEFECTS_BIN",
     "refresh-vars.sh": "REFRESH_VARS_BIN",
     "refresh-lib.sh": "REFRESH_LIB_BIN",
+    "house-style-inventory.sh": "HOUSE_STYLE_INVENTORY_BIN",
 }
 
 CASES = Cases("check-refresh-scripts-cases")
@@ -311,6 +336,18 @@ LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
           # DB_URL: ${{ vars.OPTIONAL_DB }}
           X: "1"
 """
+# The house style (#470): the head adds a token NAME (--color-new) and changes
+# the components, so a marked project at the stamp has both to take.
+TOKENS_S = """:root {
+  --color-accent: #106AD0;
+  --color-bg: #F5F5F3;
+  --space-1: 4px;
+}
+"""
+TOKENS_H = TOKENS_S.replace("}\n", "  --color-new: #8C887F;\n}\n")
+COMP_S = ".btn { color: var(--color-accent); }\n"
+COMP_H = COMP_S + ".field { border-color: var(--color-new); }\n"
+JS_H = "window.House = {};\n"   # the shared page script, shipped from the head only (#471)
 SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
                        "hooks": {"SessionStart": [{"hooks": [
                            {"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"}]}]}},
@@ -337,6 +374,8 @@ S_FILES = {
     "templates/ui-tests/package.json": "{}\n",
     "templates/ui-tests/package-lock.json": "{}\n",
     "templates/claude-settings.json": SETTINGS,
+    "templates/styles/tokens.css": TOKENS_S,
+    "templates/styles/components.css": COMP_S,
     "docs/standards/kit-defects.md": KIT_DEFECTS,
     "docs/guide.md": "a guide\n",
     **{f"directives/{d}.md": f"# {d}\n" for d in ("global", "git", "design", "test", "data")},
@@ -350,6 +389,9 @@ H_FILES = {
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v2\n",
     "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v2')\n",
+    "templates/styles/tokens.css": TOKENS_H,
+    "templates/styles/components.css": COMP_H,
+    "templates/styles/components.js": JS_H,
 }
 EXEC = {"templates/claude-hooks/session-start.sh",
         "templates/scripts/guard.py", "templates/scripts/lint.py"}
@@ -1143,6 +1185,146 @@ expect("vars: reads all present at the stamp print the explicit OK line",
 run(r, "refresh-stamp.sh")
 expect("vars: after the stamp consumed Phase 2's marker it refuses, never a false OK",
        run(r, "refresh-vars.sh"), 2, "no Phase 2 marker", absent="OK: no new")
+
+# ---- the house style (#470) --------------------------------------------------
+# A project MARKED as on the house style (.claude/directive-sync.json ->
+# house_style: true) has styles/components.css compared verbatim and
+# styles/tokens.css by token name, every run; an unmarked one compares nothing
+# there. Before #470 neither script looked at styles/ at all.
+RULED = TOKENS_H.replace("#F5F5F3", "#020305").replace("#106AD0", "#FFD21A")   # an owner-ruled dark palette
+
+
+def house(name, tokens=TOKENS_H, comp=COMP_H, js=JS_H, mark=True, extra=None, **kw):
+    sync = {"house_style": mark} if mark is not None else {}
+    return project(name, changes={"styles/tokens.css": tokens, "styles/components.css": comp,
+                                  "styles/components.js": js, **(extra or {})},
+                   sync_extra=sync, **kw)
+
+
+r = house("house-current")
+res = run(r, "refresh-drift.sh", env={"REFRESH_PIN": H})
+expect("house drift: current files print the token line and no styles finding",
+       res, 0, "TOKENS: styles/tokens.css declares all 4 house token names", absent="styles/components.css")
+r = house("house-stale", comp=COMP_S)
+expect("house drift: components.css as taken at the stamp is STALE",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "STALE: styles/components.css")
+r = house("house-custom", comp=COMP_H + ".mine { color: red; }\n")
+expect("house drift: a local edit to components.css is CUSTOM",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "CUSTOM: styles/components.css")
+r = house("house-comp-gone", comp=None)
+expect("house drift: an absent components.css is MISSING, never skipped",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "MISSING: styles/components.css")
+# The shared page script (#471): a verbatim drop-in like components.css, but
+# shipped from the head only, so a pin that predates it requires nothing.
+r = house("house-js-gone", js=None)
+expect("house drift: an absent components.js is MISSING where the pin ships it",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "MISSING: styles/components.js")
+expect("house drift: …and not where the pin predates it",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": S}), 0, "TOKENS:", absent="styles/components.js")
+r = house("house-js-custom", js=JS_H + "// mine\n")
+expect("house drift: a local edit to components.js is a finding, never silent",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "DRIFT: styles/components.js")
+r = house("house-tokens-gone", tokens=None)
+expect("house drift: an absent tokens.css is MISSING, never skipped",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "MISSING: styles/tokens.css")
+r = house("house-lacks", tokens=TOKENS_S.replace("}\n", "  /* --color-new: #000; */\n}\n"))
+expect("house drift: a token name the head added is named, and a commented-out one does not count",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0,
+       "TOKENS: styles/tokens.css lacks 1 of 4 house token names at " + H + ": --color-new")
+r = house("house-ruled", tokens=RULED)
+expect("house drift: a ruled palette (other values, every name) is not a finding",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "declares all 4 house token names", absent="styles/tokens.css lacks")
+r = house("house-own-sheet", extra={"styles/legacy.css": ".legacy-btn { color: red; }\n"})
+expect("house drift: a project's own stylesheet beside them stays silent",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "TOKENS:", absent="styles/legacy.css")
+r = house("house-unmarked", comp=COMP_S, mark=None)
+expect("house drift: an unmarked project says so and compares nothing in styles/",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "HOUSE-STYLE: not marked", absent="styles/components.css")
+r = house("house-string", comp=COMP_S, mark="true")
+expect("house drift: a marker that is not exactly true is not a marker",
+       run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, "HOUSE-STYLE: not marked", absent="STALE: styles/")
+
+r = house("house-stamp-ok", tokens=RULED)
+run(r, "refresh-delta.sh")
+expect("house stamp: current components and a ruled palette with every name stamp",
+       run(r, "refresh-stamp.sh"), 0, f"stamped: {H}")
+r = house("house-stamp-comp", comp=COMP_S)
+run(r, "refresh-delta.sh")
+expect("house stamp: components.css not taken refuses",
+       run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.css differs from templates/styles/components.css")
+r = house("house-stamp-js", js=JS_H + "// mine\n")
+run(r, "refresh-delta.sh")
+expect("house stamp: components.js not taken refuses",
+       run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.js differs from templates/styles/components.js")
+r = house("house-stamp-js-gone", js=None)
+run(r, "refresh-delta.sh")
+expect("house stamp: an absent components.js is required",
+       run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.js is absent but required -- the project is on the house style")
+r = house("house-stamp-comp-gone", comp=None)
+run(r, "refresh-delta.sh")
+expect("house stamp: an absent components.css is required",
+       run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.css is absent but required -- the project is on the house style")
+r = house("house-stamp-tokens-gone", tokens=None)
+run(r, "refresh-delta.sh")
+rc, out = res = run(r, "refresh-stamp.sh")
+expect("house stamp: an absent tokens.css is required", res, 1,
+       "UNAPPLIED: styles/tokens.css is absent but required")
+m = re.search(r"styles/tokens\.css is absent but required .*\(blob ([0-9a-f]{40})\) \(local absent\)", out)
+check("house stamp: the refusal prints the blob and local absent a decline binds to", bool(m), out)
+if m:
+    set_kept(r, "styles/tokens.css", {"blob": m.group(1), "local": "absent", "reason": "tokens live in css/tokens.css here"})
+    expect("house stamp: a decline bound to both blobs reads as KEPT and stamps",
+           run(r, "refresh-stamp.sh"), 0, "KEPT: styles/tokens.css -- tokens live in css/tokens.css here")
+r = house("house-stamp-lacks", tokens=TOKENS_S)
+run(r, "refresh-delta.sh")
+rc, out = res = run(r, "refresh-stamp.sh")
+expect("house stamp: a missing token name refuses and names it", res, 1,
+       "UNAPPLIED: styles/tokens.css lacks house token name(s) templates/styles/tokens.css declares at " + H + ": --color-new")
+m = re.search(r"--color-new -- .*\(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
+if m:
+    set_kept(r, "styles/tokens.css", {"blob": m.group(1), "local": m.group(2), "reason": "no field edges on this site"})
+    expect("house stamp: a recorded decline of the missing name reads as KEPT",
+           run(r, "refresh-stamp.sh"), 0, "KEPT: styles/tokens.css -- no field edges on this site")
+    (r / "styles/tokens.css").write_text(TOKENS_S + "/* edited */\n", encoding="utf-8")
+    run(r, "refresh-delta.sh")
+    expect("house stamp: …and binds no longer once the file changes",
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/tokens.css lacks")
+else:
+    CASES.fail("house stamp: the missing-name refusal prints both blobs", out)
+r = house("house-stamp-current", comp=None, stamp=H)
+run(r, "refresh-delta.sh")
+expect("house stamp: required every run, also when the delta lists nothing",
+       run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/components.css is absent but required")
+r = house("house-stamp-unmarked", comp=COMP_S, tokens=None, mark=False)
+run(r, "refresh-delta.sh")
+expect("house stamp: an unmarked project compares nothing in styles/ and says so",
+       run(r, "refresh-stamp.sh"), 0, "not on the house style", absent="UNAPPLIED: styles/")
+
+# The inventory /design-intake's existing-project move runs before and after
+# its rename step: the class names a project's own stylesheets share with the
+# house components.css (the fixture's head defines .btn and .field).
+r = house("inv-collide", tokens=None, mark=None,
+          comp=".btn { background: url(x.field); } /* .field */\n.card { color: red; }\n",
+          extra={"styles/layout.css": "@media (min-width: 40.5em) { .btn { color: blue; } }\n"})
+res = run(r, "house-style-inventory.sh", env={"REFRESH_PIN": H})
+expect("inventory: a shared class name is a COLLISION naming every own sheet, nested @media rules included",
+       res, 1, "COLLISION: .btn -- the house components.css defines it, and so do: styles/components.css, styles/layout.css")
+expect("inventory: a dotted word in a value or a comment is not a class", res, 1, "SUMMARY: 1 collision(s)", absent="COLLISION: .field")
+expect("inventory: with no styles/tokens.css it says so", res, 1, "TOKENS: there is no styles/tokens.css yet")
+r = house("inv-clean", tokens=TOKENS_S, mark=None,
+          extra={"styles/legacy.css": ".legacy-btn { color: red; } .legacy-field { color: blue; }\n"})
+res = run(r, "house-style-inventory.sh", env={"REFRESH_PIN": H})
+expect("inventory: after the rename, with the house file installed verbatim, no collision",
+       res, 0, "SUMMARY: no collision -- 2 own stylesheet(s)")
+expect("inventory: a house token name no stylesheet declares is named", res, 0,
+       "TOKENS: no tracked stylesheet declares 1 of 4 house token names: --color-new")
+
+r = house("house-merge", tokens=TOKENS_S.replace("#106AD0", "#0E7C6D"), comp=COMP_H)
+res = run(r, "refresh-merge.sh", "styles/tokens.css", "--write", env={"REFRESH_PIN": H})
+merged = (r / "styles/tokens.css").read_text(encoding="utf-8")
+expect("house merge: tokens.css merges without conflict", res, 0, "MERGED:")
+check("house merge: the new name arrives and the ruled value stays",
+      "--color-new: #8C887F;" in merged and "#0E7C6D" in merged and "#106AD0" not in merged, merged)
 
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(CASES.finish(f"{CASES.passed} refresh-script behaviours hold against a fixture upstream."))

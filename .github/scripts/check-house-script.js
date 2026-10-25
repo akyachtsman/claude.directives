@@ -477,6 +477,21 @@ async function archivedChecks(p, tag) {
   check(f.ok, 'phone: the ⋮ pop-over stays inside the window', JSON.stringify(f));
   await phone.keyboard.press('Escape');
   await archivedChecks(phone, 'phone: ');
+  // The on-screen keyboard shrinks only the visual viewport (iPhone Safari):
+  // a pop-over must fit the visible part, not the layout viewport behind it.
+  // Chromium has no keyboard here, so the visual viewport is stood in for.
+  await phone.evaluate(() => window.scrollTo(0, 0));
+  const kb = await phone.evaluate(() => {
+    const b = document.getElementById('menu-btn').getBoundingClientRect();
+    const fake = { offsetLeft: 0, offsetTop: 0, width: document.documentElement.clientWidth, height: Math.round(b.bottom + 60) };
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: { ...fake, addEventListener() {} } });
+    document.getElementById('menu-1').hidden = false;
+    House.fit(document.getElementById('menu-1'), document.getElementById('menu-btn'), { align: 'end' });
+    const r = document.getElementById('menu-1').getBoundingClientRect();
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), visible: fake.height };
+  });
+  check(kb.top >= 0 && kb.bottom <= kb.visible, 'phone: with the keyboard up, a pop-over fits the visual viewport', JSON.stringify(kb));
+  await phone.evaluate(() => { document.getElementById('menu-1').hidden = true; delete window.visualViewport; });
   const wide = await phone.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   check(wide, 'phone: the page never scrolls sideways');
   await phone.close();

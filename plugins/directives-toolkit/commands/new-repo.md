@@ -171,6 +171,10 @@ Execute in order:
    (every page loads `styles/components.js`, the shared page script) and pass the
    contrast guardrail as-is; `/design-intake` keeps them, and changes token
    values only when the owner rules a project palette (per `directives/design.md`).
+   Mark the project as on the house style, so `/refresh-repo` keeps the three files
+   current: `"house_style": true` in `.claude/directive-sync.json`, with the
+   `jq` line in step 1 of `/design-intake`, creating the file as `{}` if it is
+   absent.
 
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains

@@ -33,6 +33,12 @@ Corollaries worth memorizing:
 - One upstream PR often spans modes (a directive + a template + a plugin
   command). Walk the PR's file list against this table and do the union of
   the actions.
+- **`templates/styles/**` reaches only a project on the house style**
+  (`.claude/directive-sync.json` → `"house_style": true`, #470). `/refresh-repo`
+  keeps that project's `styles/components.css` exact and its `styles/tokens.css`
+  holding every house token name. A project not yet moved gets nothing from a
+  refresh: it moves once, with `/design-intake`'s step 1c (*Move an existing project*),
+  when you approve it.
 - **Some copied files are extended locally, and "approve the dispositions" is
   not "accept them all".** `qa.yml` is the standing case: projects add their own
   steps to it — `claude.prop` carries a unit-test step and a path guard — so a

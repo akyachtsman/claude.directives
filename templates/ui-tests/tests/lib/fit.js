@@ -88,10 +88,13 @@ async function fitProblems(locator, { timeout = FIT_MS } = {}) {
           problems.push(`CUT OFF: ${name(el)} shows ${el.clientHeight}px of ${el.scrollHeight}px and cannot scroll (overflow-y: ${cs.overflowY})`);
         }
         if (over > 1 && scrolls(cs)) {
+          // Toward whichever end has room: a list already scrolled to its
+          // bottom (an autocomplete showing its selected option) moves up.
           const before = el.scrollTop;
-          el.scrollTop = before + Math.min(over, 40);
+          const down = over - before >= 1;
+          el.scrollTop = down ? before + Math.min(over - before, 40) : before - Math.min(before, 40);
           await frame();
-          const moved = el.scrollTop > before;
+          const moved = down ? el.scrollTop > before : el.scrollTop < before;
           el.scrollTop = before;
           if (!moved) problems.push(`DOES NOT SCROLL: ${name(el)} holds ${el.scrollHeight}px in ${el.clientHeight}px, and setting its scrollTop did not move it`);
           for (let n = el; n && n.nodeType === 1; n = n.parentElement) {

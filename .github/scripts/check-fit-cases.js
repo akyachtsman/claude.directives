@@ -6,7 +6,8 @@
 //
 // Two halves, one page per case, each built from the SHIPPED tokens.css and
 // components.css:
-//   * the house components pass: a long type-ahead list, a long ⋮ menu, a
+//   * the house components pass: a long type-ahead list (also one already
+//     scrolled to its end), a long ⋮ menu, a
 //     dialog taller than the screen, an overlay holding visually-hidden text;
 //   * each way an overlay fails on an iPhone is caught, with the problem it
 //     must name: a sheet that clips its list (the 2026-10-25 board-post list),
@@ -45,6 +46,10 @@ const CASES = [
   { name: 'house type-ahead list, 30 choices, under a field',
     body: `<div class="page"><label class="field"><span class="label">Post</span><textarea class="input" role="combobox" aria-expanded="true" aria-controls="lp"></textarea></label></div>
            <div class="list-pop" role="listbox" id="lp" style="top:140px;left:12px"><div class="list-head">Start with a type</div>${rows(30)}</div>`,
+    target: '.list-pop', expect: [] },
+  { name: 'house type-ahead list already scrolled to its last choice',
+    body: `<div class="list-pop" role="listbox" id="lp" style="top:100px;left:12px">${rows(30)}</div>`,
+    script: `const l = document.getElementById('lp'); l.scrollTop = l.scrollHeight;`,
     target: '.list-pop', expect: [] },
   { name: 'house ⋮ menu, 40 actions',
     body: `<div class="menu-pop" id="mp" style="top:80px;right:12px">${items(40)}</div>`,

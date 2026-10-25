@@ -378,12 +378,19 @@ const page = await open({ width: 1280, height: 800 });
     const back = !opener.disabled;
     House.dialog.open(d, { opener });
     const reopened = d.open;
+    // Closed and opened again at once: the first close's queued event must not
+    // close the second opening.
+    let again = null;
+    House.dialog.close(d);   // the reopened one: its close event is now queued
+    House.dialog.open(d, { opener }).then(v => { again = 'answered: ' + v; });
+    await new Promise(r => setTimeout(r, 100));
+    const stays = d.open && again === null;
     House.dialog.close(d);
     d.remove();
-    return { answer, back, reopened };
+    return { answer, back, reopened, stays, again };
   });
-  check(formClose.answer === 'ok' && formClose.back && formClose.reopened,
-    'a native dialog closed by its own form answers, gives its opener back, and opens again', JSON.stringify(formClose));
+  check(formClose.answer === 'ok' && formClose.back && formClose.reopened && formClose.stays,
+    'a native dialog closed by its own form answers, gives its opener back, and opens again, and a stale close never shuts the new opening', JSON.stringify(formClose));
   check(nested.inner && nested.outer && nested.outerClosedByEsc,
     'a dialog nested in another\'s markup: its Cancel closes only it, and its typing does not hold the outer one open', JSON.stringify(nested));
 

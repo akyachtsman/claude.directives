@@ -699,7 +699,9 @@
     entry.onCancel = e => { e.preventDefault(); request(entry, 'esc'); };
     // A native dialog the browser closed itself (a <form method="dialog">, a
     // page's own dialog.close()) is finished the same way, with its returnValue.
-    entry.onClose = () => finish(entry, box.returnValue);
+    // The close event is queued, so one from an earlier opening can arrive
+    // after the page has opened the dialog again: an open dialog ignores it.
+    entry.onClose = () => { if (!box.open) finish(entry, box.returnValue); };
     box.addEventListener('input', entry.onInput);
     (backdrop || box).addEventListener('click', entry.onClick);
     (backdrop || box).addEventListener('mousedown', entry.onDown);

@@ -4,7 +4,8 @@
    var(--…), so re-theming happens in tokens.css alone. A screen never adds its
    own button, card, pill or dialog class: a size or layout need is a modifier on
    the shared one. Meets the craft rules in design.md (44px targets,
-   :focus-visible, reduced motion). The behaviour these need (the confirmation
+   :focus-visible, reduced motion) and the iPhone rules (design.md -> iPhone
+   and iPad). The behaviour these need (the confirmation
    dialog, the Archived (N) fit, the empty state, inline messages) lives in ONE
    shared script per project, never per page. */
 
@@ -49,6 +50,23 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
    (full width) sits outside it. */
 .page { max-width: 1440px; margin: 0 auto; padding: var(--space-4); }
 @media (min-width: 700px) { .page { padding: var(--space-6); } }
+/* An iPhone on its side puts the notch over the left or right edge. The inset is
+   0 everywhere else, and on an iPhone too unless the page's viewport meta says
+   viewport-fit=cover, so this changes nothing until a page asks for it. */
+.page {
+  padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+}
+@media (min-width: 700px) {
+  .page {
+    padding-left: max(var(--space-6), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-6), env(safe-area-inset-right, 0px));
+  }
+}
+/* Every height tied to the screen is given twice: vh first, for a browser
+   without dvh, then dvh. On an iPhone, vh is the screen with Safari's address
+   bar hidden, so 88vh runs past the bottom of the screen while the bar shows;
+   dvh is the height actually showing (design.md -> iPhone and iPad). */
 /* An action link standing on its own (Back, Clear filters, any link that does
    something rather than sits in a sentence) gets the 44px target a link in
    running text is exempt from. Works on <a> or <button>. */
@@ -158,7 +176,7 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 /* ── Lists and tables (§6) ────────────────────────────────────────────────── */
 /* Wider or taller than the screen: scrolls inside its own box, so the page
    never scrolls sideways and the sticky header stays visible. */
-.table-wrap { overflow: auto; max-width: 100%; max-height: 70vh; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.table-wrap { overflow: auto; overscroll-behavior: contain; max-width: 100%; max-height: 70vh; max-height: 70dvh; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 .table { width: 100%; border-collapse: collapse; background: var(--color-surface); }
 .table th, .table td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); text-align: left; }
 .table th {
@@ -259,12 +277,22 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 .empty-state.empty-sm { padding: var(--space-6) var(--space-3); }
 
 /* ── Dialogs (§9, §10): one shell; sized to the window, never a fixed width ── */
+/* The backdrop scrolls too, as a last resort: a dialog taller than the screen
+   (a phone on its side, the keyboard up) can still be scrolled into view. */
 .dialog-backdrop {
   position: fixed; inset: 0; z-index: var(--z-dialog); background: var(--color-backdrop);
   display: flex; align-items: center; justify-content: center; padding: var(--space-4);
+  overflow-y: auto; overscroll-behavior: contain;
 }
+/* While a dialog is open the page behind it stays still. CSS, not a script:
+   the usual script lock cancels every touchmove, and that also stops a finger
+   scrolling the dialog's own list on an iPhone (design.md -> iPhone and iPad). */
+html:has(.dialog-backdrop:not([hidden])), html:has(dialog.dialog[open]) { overflow: hidden; }
+/* margin: auto keeps a dialog taller than the backdrop reachable from its top;
+   align-items: center alone would push its top off the screen. */
 .dialog {
-  width: min(480px, 94vw); max-height: 88vh; display: flex; flex-direction: column;
+  width: min(480px, 94vw); max-height: 88vh; max-height: 88dvh; display: flex; flex-direction: column;
+  margin: auto;
   background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
 }
 /* A native <dialog> opened with showModal() takes the same shell. */
@@ -274,15 +302,20 @@ dialog.dialog:not([open]) { display: none; }
 dialog.dialog::backdrop { background: var(--color-backdrop); }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-6); }
 .dialog-title { font-size: var(--font-lg); font-weight: 600; margin: 0; min-width: 0; }
-.dialog-body { padding: 0 var(--space-6) var(--space-4); overflow: auto; }
+.dialog-body { padding: 0 var(--space-6) var(--space-4); overflow: auto; overscroll-behavior: contain; }
 /* Cancel (secondary) on the left, the act on the right, right-aligned. */
 .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border); }
 
 /* ── Archived (N) pop-over (§7): stays inside the window, long lists scroll ── */
+/* Every pop-over (Archived, the ⋮ menu, the type-ahead list) is position:
+   fixed, so no card, dialog or sidebar with overflow: hidden can cut it off,
+   and the shared fit places it inside the screen. overscroll-behavior: contain
+   keeps a swipe at the end of its list from scrolling the page behind it. */
 .archived-btn { /* a .btn: the archive icon, then "Archived (N)"; hidden when N is 0 */ }
-.archived-pop, .menu-pop {
-  position: fixed; z-index: var(--z-popover); width: min(360px, 94vw); max-height: min(60vh, 480px);
-  overflow: auto; background: var(--color-surface); border: 1px solid var(--color-border);
+.archived-pop, .menu-pop, .list-pop {
+  position: fixed; z-index: var(--z-popover); width: min(360px, 94vw);
+  max-height: min(60vh, 480px); max-height: min(60dvh, 480px);
+  overflow: auto; overscroll-behavior: contain; background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-2);
 }
 .archived-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
@@ -299,6 +332,22 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
 .menu-item:focus-visible { outline: 3px solid var(--color-accent); outline-offset: -3px; }
 .menu-item.danger { color: var(--color-danger); }
 .menu-item.danger:hover { background: var(--color-danger-bg); } /* the checked danger pair, never accent-light */
+
+/* ── The type-ahead list (§16): choices that filter as you type ───────────────
+   A /command, an @mention, an autocomplete. A fixed list is a native <select>
+   instead: on a phone it opens the phone's own picker. Markup: the field has
+   role="combobox", aria-expanded, aria-controls and aria-activedescendant;
+   <div class="list-pop" role="listbox" id="…"> of <div class="list-option"
+   role="option" id="…">. Placed under its field by the shared fit. */
+.list-pop { display: flex; flex-direction: column; }
+.list-option {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  min-height: var(--size-target-min); padding: var(--space-2) var(--space-3); flex: none;
+  border-radius: var(--radius-sm); color: var(--color-text-primary); cursor: pointer;
+}
+.list-option .list-hint { font-size: var(--font-sm); color: var(--color-text-secondary); text-align: right; }
+.list-option:hover, .list-option[aria-selected="true"] { background: var(--color-accent-light); }
+.list-head { padding: var(--space-2) var(--space-3); font-size: var(--font-xs); font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: .06em; }
 
 /* ── Upload box (§13) ─────────────────────────────────────────────────────── */
 .upload {
@@ -317,7 +366,8 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
 .inline-msg.err { color: var(--color-danger); } /* set role="alert" with it */
 .inline-msg.ok { color: var(--color-success); }
 .toast {
-  position: fixed; z-index: var(--z-toast); left: 50%; bottom: var(--space-6); transform: translateX(-50%);
+  position: fixed; z-index: var(--z-toast); left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); /* above the iPhone's home bar */
   max-width: min(480px, 94vw); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
   background: var(--color-text-primary); color: var(--color-surface); box-shadow: var(--shadow-md);
 }

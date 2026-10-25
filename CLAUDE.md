@@ -131,6 +131,11 @@ A directive repo must pass its own CI before it can be trusted downstream.
   interactive Pages artifact, `docs/site/logical-map.html`. What each case covers and why it exists is in
   `docs/internal/repo-map-ui.md`; read that before changing the map, the router,
   or the suite.
+  The same job installs WebKit too and runs `check-fit-cases.js`: the UI kit's
+  fit check (`templates/ui-tests/tests/lib/fit.js`) against the shipped
+  `tokens.css` + `components.css` at phone size in Chromium and WebKit, so the
+  house pop-overs and dialog are proven to fit and scroll on an iPhone's engine
+  (`design.md` → *iPhone and iPad*).
 A red run reaches a session through its PR subscription, and GitHub emails the
 run's actor; Codex's verdict is read from the PR (`git.md` → *PR Lifecycle*).
 Self-test triage: `docs/internal/repo-monitors.md`. Exported automation standard and escalation rules:
@@ -178,6 +183,7 @@ Not in that job, so run them by hand when they apply:
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 npm_config_legacy_peer_deps=true npx html-validate@10.17.0 docs/site/logical-map.html   # when the map changed (CI runs it every time, same pin and env)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
+node .github/scripts/check-fit-cases.js                      # when components.css or the kit's lib/fit.js changed; also needs `npx playwright install-deps webkit && npx playwright install webkit` (FIT_BROWSERS=chromium skips WebKit, and says so)
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json, the map, or any file a drawn connection quotes, regenerate first: node .github/scripts/build-logical-map.js

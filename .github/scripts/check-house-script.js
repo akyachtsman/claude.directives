@@ -101,12 +101,12 @@ const page = await open({ width: 1280, height: 800 });
   await clearLog(page);
   await page.click('#archive-one');
   const d = await page.evaluate(() => {
-    const box = document.querySelector('.dialog-backdrop:not([hidden]) .dialog');
+    const box = document.querySelector('dialog.dialog[open]:not(#native-dialog)');
     const t = document.getElementById(box.getAttribute('aria-labelledby'));
-    return { role: box.getAttribute('role'), modal: box.getAttribute('aria-modal'), title: t && t.textContent,
+    return { modal: box.matches(':modal'), title: t && t.textContent,
       opener: document.getElementById('archive-one').disabled };
   });
-  check(d.role === 'dialog' && d.modal === 'true' && d.title === 'Archive Walk-in fridge?', 'confirm opens a labelled modal dialog', JSON.stringify(d));
+  check(d.modal && d.title === 'Archive Walk-in fridge?', 'confirm opens a labelled native modal dialog', JSON.stringify(d));
   check(d.opener, 'the control that asked is disabled while the question is open');
   check(await focusedId(page) === 'Cancel', 'a red act puts focus on Cancel, so Enter never confirms it', await focusedId(page));
   // From Cancel, Tab goes Archive, ×, then wraps to Cancel and Archive.
@@ -125,11 +125,11 @@ const page = await open({ width: 1280, height: 800 });
   check((await log(page)).includes('archive:false'), 'Esc answers no');
   check(await focusedId(page) === 'archive-one', 'closing returns focus to the opener');
   check(await page.evaluate(() => !document.getElementById('archive-one').disabled), 'the opener is enabled again');
-  check(await page.evaluate(() => !document.querySelector('.dialog-backdrop:not([hidden]) .dialog:not(#form-dialog .dialog)')), 'the built dialog is removed once answered');
+  check(await page.evaluate(() => !document.querySelector('dialog.dialog:not(#native-dialog)')), 'the built dialog is removed once answered');
 
   await clearLog(page);
   await page.click('#archive-one');
-  await page.click('.dialog-backdrop:not([hidden]) .dialog-footer .btn-danger');
+  await page.click('dialog.dialog[open]:not(#native-dialog) .dialog-footer .btn-danger');
   await settle(page);
   check((await log(page)).includes('archive:true'), 'the act\'s button answers yes');
 
@@ -141,7 +141,7 @@ const page = await open({ width: 1280, height: 800 });
 
   await clearLog(page);
   await page.click('#archive-one');
-  await page.click('.dialog-backdrop:not([hidden]) .dialog-header [aria-label="Close"]');
+  await page.click('dialog.dialog[open]:not(#native-dialog) .dialog-header [aria-label="Close"]');
   await settle(page);
   check((await log(page)).includes('archive:false'), '× answers no');
 
@@ -171,7 +171,7 @@ const page = await open({ width: 1280, height: 800 });
   await page.keyboard.press('Escape');
   await page.mouse.click(5, 5);
   await settle(page);
-  check(!(await log(page)).length && await page.evaluate(() => !!document.querySelector('.dialog-backdrop:not([hidden]) .input')),
+  check(!(await log(page)).length && await page.evaluate(() => !!document.querySelector('dialog.dialog[open]:not(#native-dialog) .input')),
     'with unsaved typing, Esc and the backdrop do nothing');
   await page.keyboard.press('Enter');
   await settle(page);
@@ -179,22 +179,22 @@ const page = await open({ width: 1280, height: 800 });
 
   await clearLog(page);
   await page.click('#rename');
-  await page.fill('.dialog-backdrop:not([hidden]) .dialog .input', '');
-  await page.click('.dialog-backdrop:not([hidden]) .dialog-footer .btn-primary');
+  await page.fill('dialog.dialog[open]:not(#native-dialog) .input', '');
+  await page.click('dialog.dialog[open]:not(#native-dialog) .dialog-footer .btn-primary');
   const req = await page.evaluate(() => {
-    const i = document.querySelector('.dialog-backdrop:not([hidden]) .dialog .input');
+    const i = document.querySelector('dialog.dialog[open]:not(#native-dialog) .input');
     const m = document.getElementById((i.getAttribute('aria-describedby') || '').split(' ').pop());
     return { invalid: i.getAttribute('aria-invalid'), text: m && m.textContent, role: m && m.getAttribute('role') };
   });
   check(req.invalid === 'true' && req.text === 'Name is required.' && req.role === 'alert',
     'a required field left empty is named next to the field', JSON.stringify(req));
-  await page.click('.dialog-backdrop:not([hidden]) .dialog-footer .btn-secondary');
+  await page.click('dialog.dialog[open]:not(#native-dialog) .dialog-footer .btn-secondary');
   await settle(page);
   check((await log(page)).includes('rename:null'), 'Cancel closes even with unsaved typing, answering null');
 
   await clearLog(page);
   await page.click('#info');
-  const n = await page.evaluate(() => [...document.querySelectorAll('.dialog-backdrop:not([hidden]) .dialog-footer button')].map(b => b.textContent));
+  const n = await page.evaluate(() => [...document.querySelectorAll('dialog.dialog[open]:not(#native-dialog) .dialog-footer button')].map(b => b.textContent));
   check(n.join() === 'Close', 'notice() has one Close button', n.join());
   check(await focusedId(page) === 'Close', 'notice() puts focus on Close', await focusedId(page));
   await page.keyboard.press('Enter');
@@ -237,6 +237,19 @@ const page = await open({ width: 1280, height: 800 });
   await page.click('#open-native');
   check(await page.evaluate(() => document.getElementById('native-dialog').open) && await focusedId(page) === 'date-field',
     'a native <dialog> opens with showModal and focus on its field');
+  await page.keyboard.press('Escape');
+  await settle(page);
+  await clearLog(page);
+  await page.click('#open-native');
+  await page.click('#native-nested');
+  check(await focusedId(page) === 'Cancel', 'a confirmation asked from inside a native dialog takes focus');
+  // A short timeout: beneath the native modal it would be inert, and the click
+  // would wait for a target that never becomes hittable.
+  await page.click('dialog.dialog[open]:not(#native-dialog) .btn-danger', { timeout: 3000 }).catch(e => fail('the confirmation above a native dialog cannot be pressed: ' + e.message.split('\n')[0]));
+  await settle(page);
+  check((await log(page)).includes('native-nested:true') && await page.evaluate(() => document.getElementById('native-dialog').open)
+    && await focusedId(page) === 'native-nested',
+    'it answers, and the native dialog below stays open with focus back inside it');
   await page.keyboard.press('Escape');
   await settle(page);
   check((await log(page)).includes('native:undefined') && await focusedId(page) === 'open-native'
@@ -325,6 +338,55 @@ async function archivedChecks(p, tag) {
   });
   check(err.count === after && err.label === 'Restore' && err.role === 'alert' && /could not be restored\. Try again\./.test(err.text),
     'a failed Restore keeps the row, gives the button back and says so beside it', JSON.stringify(err));
+  await page.keyboard.press('Escape');
+
+  // Two restores at once: the first finishing must not re-arm the second's
+  // button, and each removes its own item (Codex, #472).
+  await page.evaluate(() => { window.restoreFails = false; });
+  await clearLog(page);
+  const names = () => page.$$eval('#archived-host .archived-row', rs => rs.map(r => r.firstElementChild.firstElementChild.textContent));
+  const before2 = await names();
+  const [idA, idB] = await page.evaluate(() => [...document.querySelectorAll('#archived-host .archived-row')].slice(1, 3)
+    .map(r => Number(r.firstElementChild.firstElementChild.textContent.replace('Archived thing ', ''))));
+  await page.evaluate(([a, b]) => { window.delays[a] = 60; window.delays[b] = 500; }, [idA, idB]);
+  await page.click(btn);
+  await page.locator('#archived-host .archived-row').nth(1).locator('.btn').click();
+  await page.locator('#archived-host .archived-row').nth(2).locator('.btn').click();
+  await page.waitForTimeout(250);
+  const mid = await page.evaluate(b => {
+    const r = [...document.querySelectorAll('#archived-host .archived-row')].find(x => x.firstElementChild.firstElementChild.textContent === 'Archived thing ' + b);
+    const x = r && r.querySelector('.btn');
+    return x && { label: x.textContent, disabled: x.disabled };
+  }, idB);
+  check(mid && mid.label === 'Restoring…' && mid.disabled, 'a restore still running stays busy when another one finishes', JSON.stringify(mid));
+  await page.waitForTimeout(500);
+  const after2 = await names();
+  const gone = before2.filter(n => !after2.includes(n));
+  check(gone.join('|') === `Archived thing ${idA}|Archived thing ${idB}` && after2.length === before2.length - 2,
+    'two restores at once each take out their own row', gone.join('|'));
+
+  // update() while a restore is running, with fresh objects of the same ids:
+  // completion removes that id, never the last row.
+  await clearLog(page);
+  const before3 = await names();
+  const idC = Number(before3[1].replace('Archived thing ', ''));
+  await page.evaluate(c => { window.delays[c] = 200; }, idC);
+  if (await page.evaluate(() => document.querySelector('#archived-host .archived-pop').hidden)) await page.click(btn);
+  await page.locator('#archived-host .archived-row').nth(1).locator('.btn').click();
+  await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('#archived-host .archived-row')];
+    window.archivedHandle.update(rows.map(r => {
+      const n = r.firstElementChild.firstElementChild.textContent;
+      return { id: n.startsWith('Archived thing ') ? Number(n.slice(15)) : 0, name: n };
+    }));
+  });
+  const busyAfterUpdate = await page.locator('#archived-host .archived-row').nth(1).locator('.btn').textContent();
+  await page.waitForTimeout(400);
+  const after3 = await names();
+  const gone3 = before3.filter(n => !after3.includes(n));
+  check(busyAfterUpdate === 'Restoring…', 'update() keeps a running restore busy', busyAfterUpdate);
+  check(gone3.join('|') === `Archived thing ${idC}` && after3[after3.length - 1] === before3[before3.length - 1],
+    'a restore finishing after update() removes its own id, not the last row', gone3.join('|'));
   await page.keyboard.press('Escape');
 
   await page.evaluate(() => window.archivedHandle.update([]));

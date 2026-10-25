@@ -129,6 +129,7 @@
           <label class="label" for="date-field">Date</label>
           <input class="input" id="date-field" type="date">
         </div>
+        <button type="button" class="btn" id="native-nested">Clear the date</button>
       </div>
       <div class="dialog-footer">
         <button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button>
@@ -173,6 +174,9 @@
       $('nested').addEventListener('click', async () => {
         note('nested:' + await House.confirm({ title: 'Archive details?', confirm: 'Archive', kind: 'danger' }));
       });
+      $('native-nested').addEventListener('click', async () => {
+        note('native-nested:' + await House.confirm({ title: 'Clear the date?', confirm: 'Clear', kind: 'danger' }));
+      });
       $('open-native').addEventListener('click', async () => {
         note('native:' + await House.dialog.open($('native-dialog')));
       });
@@ -182,10 +186,11 @@
       });
       $('tabs').addEventListener('house:select', e => note('tab:' + e.detail.tab.id));
       window.restoreFails = false;
+      window.delays = {};
       const items = Array.from({ length: 30 }, (_, i) => ({ id: i, name: i === 0 ? 'A very long archived name that must wrap inside the pop-over and never be cut short' : 'Archived thing ' + i }));
       window.archivedHandle = House.archived($('archived-host'), {
         items,
-        onRestore: item => new Promise((resolve, reject) => setTimeout(() => (window.restoreFails ? reject(new Error('x')) : resolve(note('restored:' + item.id))), 50)),
+        onRestore: item => new Promise((resolve, reject) => setTimeout(() => (window.restoreFails ? reject(new Error('x')) : resolve(note('restored:' + item.id))), window.delays[item.id] || 50)),
       });
     });
   </script>

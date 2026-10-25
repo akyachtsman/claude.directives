@@ -318,7 +318,18 @@
     host.replaceChildren(btn, pop);
     const d = disclosure(btn, pop, { align: 'start' });
 
+    // Restores in flight and failures, by item id (the item itself when it has
+    // none), so a re-render (another restore finishing, update()) keeps a
+    // pending row busy and its error showing, and a completion removes ITS item
+    // by id, never whatever sits at a stale index.
+    const keyOf = item => (item && item.id !== undefined ? item.id : item);
+    const indexOf = key => list.findIndex(i => keyOf(i) === key);
+    const pending = new Set();
+    const failed = new Map();
+    const buttons = new Map();
+
     const row = item => {
+      const key = keyOf(item);
       const r = document.createElement('div');
       r.className = 'archived-row';
       const who = document.createElement('div');
@@ -336,29 +347,46 @@
       restore.className = 'btn btn-secondary';
       restore.textContent = 'Restore';
       restore.setAttribute('aria-label', `Restore ${item.name}`);
+      if (pending.has(key)) busy(restore, 'Restoring…');
       restore.addEventListener('click', async () => {
+        if (pending.has(key)) return;
+        pending.add(key);
+        failed.delete(key);
         message(restore, '');
-        const undo = busy(restore, 'Restoring…');
-        try {
-          await onRestore(item);
-        } catch (err) {
-          undo();
-          message(restore, `${item.name} could not be restored. Try again.`, { after: r });
-          return;
+        busy(restore, 'Restoring…');
+        let ok = true;
+        try { await onRestore(item); } catch (err) { ok = false; }
+        pending.delete(key);
+        const active = document.activeElement;
+        const hadFocus = pop.contains(active) || !active || active === document.body;
+        const at = indexOf(key);
+        if (ok) {
+          if (at >= 0) list.splice(at, 1);
+          toast(`${item.name} restored.`);
+        } else if (at >= 0) {
+          failed.set(key, `${item.name} could not be restored. Try again.`);
         }
-        const at = list.indexOf(item);
-        list.splice(at, 1);
         render();
-        toast(`${item.name} restored.`);
-        const next = pop.querySelectorAll('.archived-row .btn')[Math.min(at, list.length - 1)];
-        if (next) next.focus();
+        if (!hadFocus) return;
+        const next = ok
+          ? (at >= 0 ? list[Math.min(at, list.length - 1)] : undefined)
+          : list[at];
+        const target = next !== undefined && buttons.get(keyOf(next));
+        if (target && !target.disabled) target.focus();
       });
       r.append(who, restore);
+      buttons.set(key, restore);
       return r;
     };
     function render() {
       text.textContent = `${label} (${list.length})`;
+      buttons.clear();
       pop.replaceChildren(...list.map(row));
+      for (const key of [...failed.keys()]) {
+        const b = buttons.get(key);
+        if (b) message(b, failed.get(key), { after: b.closest('.archived-row') });
+        else failed.delete(key);
+      }
       if (!list.length) d.hide(false);
       btn.hidden = list.length === 0;
       d.refit();
@@ -538,7 +566,10 @@
          busy (House.dialog.setBusy) nothing but House.dialog.close closes it,
          and while it holds unsaved typing (any input inside, or
          House.dialog.setDirty) Esc and the backdrop do nothing;
-       - Esc closes only the top dialog of a stack;
+       - Esc closes only the top dialog of a stack. A native <dialog> sits in
+         the browser's top layer and makes everything outside it inert, so a
+         page's own dialog opened from inside one must be a native <dialog>
+         too; confirm / ask / notice always are;
        - closing re-enables the opener and puts focus back on it. */
   const stack = [];
   const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -668,11 +699,12 @@
      notice({ title, body }) -> undefined, one Close button
      Each builds the house dialog shell, opens it with House.dialog.open, and
      removes it once answered. */
+  // Built as a native <dialog> opened with showModal(), so it joins the top
+  // layer: a confirmation asked from inside a page's own native dialog sits
+  // above it and stays pressable, where a positioned <div> would be inert
+  // beneath it (Codex, #472).
   function shell({ title, body }) {
-    const backdrop = document.createElement('div');
-    backdrop.className = 'dialog-backdrop';
-    backdrop.hidden = true;
-    const box = document.createElement('div');
+    const box = document.createElement('dialog');
     box.className = 'dialog';
     const header = document.createElement('div');
     header.className = 'dialog-header';
@@ -697,9 +729,8 @@
     const footer = document.createElement('div');
     footer.className = 'dialog-footer';
     box.append(header, main, footer);
-    backdrop.append(box);
-    document.body.append(backdrop);
-    return { backdrop, box, main, footer };
+    document.body.append(box);
+    return { box, main, footer };
   }
   const button = (text, cls, close) => {
     const b = document.createElement('button');
@@ -721,8 +752,8 @@
     if (!cls) throw new Error(`House.confirm: kind is primary, danger or delete, not "${kind}"`);
     const act = button(verb, cls, false);
     s.footer.append(button(cancel, 'btn btn-secondary', true), act);
-    act.addEventListener('click', () => closeDialog(s.backdrop, true));
-    return openDialog(s.backdrop, { opener }).then(v => { s.backdrop.remove(); return v === true; });
+    act.addEventListener('click', () => closeDialog(s.box, true));
+    return openDialog(s.box, { opener }).then(v => { s.box.remove(); return v === true; });
   }
 
   function ask(opts) {
@@ -747,15 +778,15 @@
     s.footer.append(button(cancel, 'btn btn-secondary', true), act);
     const save = () => {
       if (required && !input.value.trim()) { message(input, `${label} is required.`); input.focus(); return; }
-      closeDialog(s.backdrop, input.value);
+      closeDialog(s.box, input.value);
     };
     act.addEventListener('click', save);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
-    const done = openDialog(s.backdrop, { opener });
+    const done = openDialog(s.box, { opener });
     // Unsaved typing is a value that differs from the one it opened with.
-    s.box.removeEventListener('input', entryOf(s.backdrop).onInput);
-    input.addEventListener('input', () => setDirty(s.backdrop, input.value !== value));
-    return done.then(v => { s.backdrop.remove(); return typeof v === 'string' ? v : null; });
+    s.box.removeEventListener('input', entryOf(s.box).onInput);
+    input.addEventListener('input', () => setDirty(s.box, input.value !== value));
+    return done.then(v => { s.box.remove(); return typeof v === 'string' ? v : null; });
   }
 
   function notice(opts) {
@@ -763,7 +794,7 @@
     const { title, body, close = 'Close', opener } = opts;
     const s = shell({ title, body });
     s.footer.append(button(close, 'btn btn-secondary', true));
-    return openDialog(s.backdrop, { opener }).then(() => { s.backdrop.remove(); });
+    return openDialog(s.box, { opener }).then(() => { s.box.remove(); });
   }
 
   /* ── Declarative binding ───────────────────────────────────────────────── */

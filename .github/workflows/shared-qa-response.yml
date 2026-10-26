@@ -1,44 +1,33 @@
-# shared-qa-response.yml — the callable version of
-# templates/workflows/qa-response.yml (#460 step 4, Phase A): event-driven QA
-# against the live URL, started by repository_dispatch. A project calls it
-# instead of carrying the copy:
-#
-#   name: QA — Event-Driven Response
-#   on:
-#     repository_dispatch:
-#       types: [qa-email-received, test-failure-reported, manual-qa-trigger]
-#     workflow_dispatch:
-#       inputs:
-#         reason:
-#           description: 'Reason for manual trigger'
-#           required: false
-#           default: 'Manual session trigger'
-#   permissions:
-#     contents: read
-#   jobs:
-#     respond:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa-response.yml@v1
-#       with:
-#         tests-dir: .github/scripts/ui-tests
-#       secrets:
-#         TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
-#         TEST_AUTH_EMAIL: ${{ secrets.TEST_AUTH_EMAIL }}
+# shared-qa-response.yml — event-driven QA against the live URL, started by a
+# repository_dispatch, called by every project's
+# .github/workflows/qa-response.yml (#460 step 4). The caller a project writes
+# is templates/workflows/qa-response.yml, pinned `@v1` (or `@vX.Y.Z`, or a
+# commit SHA). Active sessions receive the results and act on them.
 #
 # The caller keeps the triggers. `github.event` here is the caller's, so the
-# trigger log and the revision summary read the dispatch exactly as the
-# template does, and every warning in the template's header (which revision a
-# repository_dispatch tests; never take a ref from client_payload) holds here.
+# trigger log and the revision summary read the dispatch itself.
 #
-# Fix a defect in BOTH this file and the template until the templates become
-# callers (Phase E). How the callable workflows differ from their templates:
-# docs/internal/shared-workflows.md.
+# ⚠️ WHICH REVISION THIS TESTS. A repository_dispatch carries no revision, so the
+# checkout below resolves to the DEFAULT BRANCH — never the branch a session
+# dispatched from. (A workflow_dispatch is different: it resolves to the branch
+# chosen in the Actions tab, and the summary step below says so.) The suite that
+# runs is main's; the app it runs against is whatever APP_URL currently serves.
+# Dispatching from a feature branch does NOT test that branch's specs, and the
+# run reports green having tested something else. Use the PR's own qa.yml run
+# for branch changes. The job below states the tested SHA in its summary so
+# this cannot pass unnoticed.
+# A ref is deliberately NOT taken from client_payload: that payload is
+# attacker-influenceable (see the injection note further down), and checking
+# out an arbitrary ref from it would run that ref's test code.
+#
+# How a called workflow works, and why: docs/internal/shared-workflows.md.
 name: Shared QA — Event-Driven Response
 
 on:
   workflow_call:
     inputs:
       tests-dir:
-        description: Directory holding the project's playwright.config.js and package.json (UI_TESTS_DIR in the template).
+        description: Directory holding the project's playwright.config.js and package.json.
         type: string
         default: .github/scripts/ui-tests
       ui-timeout-minutes:
@@ -114,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     # 120 is the fleet FLOOR for a ui-suite caller. Set HIGHER if your suite
     # needs it, never lower, and raise it BEFORE adding projects. Why 120 (measurements, arithmetic, what it does NOT cover): the
-    # CALLER BOUND section of .github/actions/ui-suite/action.yml's header.
+    # CALLER BOUND section of templates/actions/ui-suite/action.yml's header.
     timeout-minutes: ${{ inputs.ui-timeout-minutes }}
 
     steps:

@@ -57,11 +57,13 @@ refresh_fetch() {
 
 # refresh_template_of <local path>: the upstream template an installed file
 # comes from, or nothing for a path no template row installs. Kit files are
-# mapped by the caller (their directory comes from kit-dirs.sh).
+# mapped by the caller (their directory comes from kit-dirs.sh). Workflows and
+# composites map to nothing (Phase E of #460 step 4, owner ruling 2026-10-26):
+# a project's workflows are callers, which a refresh never merges, and the
+# composites are read from claude.directives at the called commit, so a
+# refresh installs neither and has no template to merge either against.
 refresh_template_of() {
   case "$1" in
-    .github/workflows/*) printf 'templates/workflows/%s\n' "${1#.github/workflows/}" ;;
-    .github/actions/*)   printf 'templates/actions/%s\n' "${1#.github/actions/}" ;;
     .github/scripts/*)   printf 'templates/scripts/%s\n' "${1#.github/scripts/}" ;;
     .claude/hooks/*)     printf 'templates/claude-hooks/%s\n' "${1#.claude/hooks/}" ;;
     # The house-style files only (#470; the shared page script, #471): a
@@ -76,9 +78,9 @@ refresh_template_of() {
 # 4): a job line `uses: akyachtsman/claude.directives/.github/workflows/
 # shared-<name>.yml@<ref>`. Only a `uses:` key counts, so a comment naming the
 # path does not. A caller's composites and scripts come from this repo at run
-# time, never from the project, so a refresh keeps the caller (a refresh_kept
-# record), never merges or overwrites it, and never asks for the composites or
-# scripts only its template needs (claude.prop pilot, 2026-10-25).
+# time, never from the project, so a refresh keeps the caller, never merges,
+# overwrites or compares it, and never asks for the composites or scripts the
+# shared workflow reads (claude.prop pilot, 2026-10-25).
 refresh_caller_of() {
   [ -f "$1" ] || return 1
   local re hit

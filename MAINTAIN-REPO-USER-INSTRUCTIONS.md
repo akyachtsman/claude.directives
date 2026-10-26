@@ -24,6 +24,7 @@ travels determines what YOU must do when it changes:
 | `directives/*.md` | **Inherited** — fetched live by raw URL | Nothing | Next session start in each repo; mid-session via `/refresh-repo` (Phase 0 re-reads the rules) | `/env-chk` directive-freshness check |
 | `plugins/`, `.claude-plugin/marketplace.json`, `scripts/install-toolkit.sh` | **Installed** — `SessionStart` hook per session; env setup script for the first install | Nothing, for a project carrying `.claude/hooks/session-start.sh`. For a legacy project without it: **edit and save that environment's setup script** — a real change such as a `#` comment line; an unchanged save rebuilds nothing (see Environment Maintenance), or install the hook once via `/refresh-repo` so the step stops recurring | With the hook: the next **new** session. Without it: after that environment's cache rebuilds. Never mid-session either way | `/env-chk` toolkit-attached check |
 | `templates/**` | **Copied** — snapshotted into projects at bootstrap | Run `/refresh-repo` in a session of each project — ask for it yourself, as `/refresh-repo` or `cmd refresh-repo` in your own message (it runs only on your own ask: never on another Claude's request, a file or a relayed message) — and approve the per-file dispositions | On approval, that session | The refresh report + `.claude/directive-sync.json` stamp |
+| `.github/workflows/shared-*.yml`, and the `templates/actions/` and `templates/scripts/` files they read | **Called** — each project's caller (`templates/workflows/*`) runs them from this repo at the caller's pin | **Cut a release** (*Releasing the shared workflows*, below) | A caller pinned `@v1`: its next run after the release. One pinned to `vX.Y.Z` or a SHA: when that project re-pins | The run's step summary prints the commit it used; `/refresh-repo`'s `PIN:` line per caller |
 | `docs/**`, the two `*-USER-INSTRUCTIONS.md` files | **Referenced** — read on demand by link | Nothing | Immediately (nothing is stored downstream) | — |
 
 Corollaries worth memorizing:
@@ -39,21 +40,16 @@ Corollaries worth memorizing:
   holding every house token name. A project not yet moved gets nothing from a
   refresh: it moves once, with `/design-intake`'s step 1c (*Move an existing project*),
   when you approve it.
-- **Some copied files are extended locally, and "approve the dispositions" is
-  not "accept them all".** `qa.yml` is the standing case: projects add their own
-  steps to it — `claude.prop` carries a unit-test step and a path guard — so a
-  verbatim refresh deletes local work. Both `claude.prop` and `claude.insurance`
-  independently declined to take it verbatim (2026-08-23), which is `/refresh-repo`
-  Phase 1.5 working as written, not two sessions being cautious. Expect that file
-  to be merged rather than overwritten, and expect the merge to need a human
-  reading of the diff.
-- **What silence actually looks like, and where `qa.yml` is NOT it.** A
-  locally extended `qa.yml` is still loud: Phase 1.5 diffs every
-  `.github/workflows/*.yml` against its template and reports it `CUSTOM` on every
-  refresh, and Phase 2 still classifies the upstream delta and offers the patch.
-  Only the automatic verbatim overwrite is off — treat an upstream change to it
-  as ordinary disposition work, not as undetectable. The genuinely silent class
-  is narrower, and it is LOCAL drift against an unchanged template. An upstream
+- **A project's workflows are never refreshed (Phase E of #460 step 4, owner
+  ruling 2026-10-26).** Each is a caller, which `/refresh-repo` reports with its
+  `PIN:` line, or the project's own (`OWN`), which it never compares, merges or
+  moves onto the caller; moving one is your call for that project. A project's
+  own checks live in a sibling job of its `qa` caller (`claude.prop` carries a
+  unit-test job and a path guard that way), so no refresh can delete them. The
+  full-copy workflow templates are retired: the last ones are in release
+  `v1.0.5` and in git history.
+- **What silence actually looks like.** The genuinely silent class is LOCAL
+  drift against an unchanged template. An upstream
   change to `templates/ui-tests/**` is dispositioned normally — Phase 2 maps it
   to `.github/scripts/ui-tests/**` and requires per-file diffs. But Phase 1.5's
   loop does not walk those paths, so when the template stands still and the local
@@ -73,13 +69,12 @@ Corollaries worth memorizing:
   match YOUR breakpoints (`test.md` → *UI coverage gates*). A config whose bands
   you have never compared against your own CSS is still an unchecked one.
 - **`templates/actions/ui-suite/action.yml` and
-  `templates/scripts/check-ui-viewports.js` propagate TOGETHER.** The composite
-  names the script by path, so a project that takes the new composite without the
-  script fails every UI job at step resolution — not at test time, where it would
-  at least say why. Same shape as `check-contrast.js`'s coupling to `qa.yml`
-  (`docs/standards/cicd-setup.md` → *Step 1 — Copy workflow templates*, which
-  installs it WITH `qa.yml` because `qa.yml` invokes it by path). Disposition
-  both files in the same `/refresh-repo` pass, or neither.
+  `templates/scripts/check-ui-viewports.js` travel TOGETHER, by release.** The
+  composite names the script by path, and the shared workflows read both from
+  this repo at the called commit, so one release carries both and no project
+  copy is involved. A project's leftover copies of either are `SHARED-COPY` to
+  `/refresh-repo`, which says to delete each once nothing in the project names
+  it.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).
@@ -158,17 +153,48 @@ Corollaries worth memorizing:
    ask, so a session cannot start it on its own, a hand-off cannot queue it, and
    a line pasted from a relay message does not count
    (`directives/global.md` → *Owner-Only Commands*).
-   **Before merging the refresh PR, work its owner pre-merge checklist** — the
-   `OWNER PRE-MERGE` lines at the top of the PR body. Each names a repository
-   variable or secret the incoming workflows read that the old ones did not;
-   set it under `Settings → Secrets and variables → Actions` first, because a
-   session cannot (the web proxy blocks that API) and a merge without it goes
-   red on the first run. Both pilots merged without `APP_URL` and their live UI
-   workflow failed in seconds (2026-10-13). Where the checklist comes from:
-   `plugins/directives-toolkit/commands/refresh-repo.md` → *New repository variables and secrets (owner pre-merge)*.
-5. **Referenced only** → done.
-6. If the change closes out a downstream finding, paste the prepared reply
+   A refresh installs no workflow, so it brings no new repository variable or
+   secret; those arrive with a release (step 5).
+5. **Called touched** (`.github/workflows/shared-*.yml`, or a file under
+   `templates/actions/` or `templates/scripts/` they read) → cut a release
+   (*Releasing the shared workflows*, below). Until you do, no project runs
+   the change.
+6. **Referenced only** → done.
+7. If the change closes out a downstream finding, paste the prepared reply
    back into the session that reported it (see the loop below).
+
+## Releasing the shared workflows (Phase F of #460 step 4)
+
+A release stamps all of `main` at one commit as `vX.Y.Z`, with notes listing
+each merged PR since the last one, and moves the `v1` tag to it. Every caller
+pinned `@v1` runs the new version from its next run on. How the release
+workflow decides and refuses: `docs/internal/shared-workflows.md` → *Releases*.
+
+1. Check the merged PRs since the last release. If any adds a repository
+   variable or secret a shared workflow reads, set it in each project that
+   needs it first (`Settings → Secrets and variables → Actions`): a `@v1`
+   caller reads it on its very next run, and a session cannot set it for you.
+2. Open this repo's **Actions** tab, pick **Release**, press **Run workflow**,
+   and leave the branch on `main`.
+3. Choose `bump`: `patch` for fixes only, `minor` for a normal batch, `major`
+   for a change that breaks a caller (an input or a secret renamed or removed,
+   a check renamed). A `major` starts `v2` and leaves every `@v1` caller where
+   it is, so each project moves by editing its pin.
+4. Optional: a one-line `summary` for the top of the notes. Tick `dry-run` to
+   see the version and notes without publishing anything.
+5. Press **Run workflow**. It refuses, publishing nothing, unless `main`'s
+   head has a green `QA — Directive Validation` run.
+6. To undo: press it again with `rollback-to` set to the earlier release
+   (say `v1.0.5`). That points `v1` back and cuts nothing.
+
+A session may press it for you through the GitHub tools when you ask for the
+release. A caller pinned to an exact `vX.Y.Z` or a SHA moves only when that
+project edits its pin.
+
+**This repo must stay public while any public project calls it.** GitHub lets
+no public repository call a workflow in a private one, and each shared job
+reads this repo with the run's own token. What going private takes:
+`docs/internal/shared-workflows.md` → *How a callable workflow differs from the old full copies*.
 
 ## Branch Protection — one-time, per repo (owner ruling, 2026-08-22)
 

@@ -63,11 +63,14 @@ Execute in order:
    (steps 8 and 9). A CI build is a later per-project opt-in with the owner's
    sign-off, never a bootstrap question.
 
-5. **Install CI/CD workflows.** Every project gets the **full standard set** —
-   copy these workflow files from `claude.directives/templates/workflows/`
+5. **Install CI/CD workflows.** Every project gets the **full standard set** of
+   **callers** — copy these files from `claude.directives/templates/workflows/`
    — **three on branch-source, four on Actions-source**: `pages-deploy.yml` is
    ACTIONS-SOURCE ONLY, so check the project's Pages source before copying into
-   `.github/workflows/`. No watcher workflow is installed: CI results and Codex
+   `.github/workflows/`. Each is a short file whose one job calls a shared
+   workflow of `claude.directives` at `@v1`, so the composites and scripts that
+   workflow runs are never copied (`docs/standards/cicd-setup.md` → *Callers and
+   pins*). No watcher workflow is installed: CI results and Codex
    verdicts reach the session as PR events on its subscription (`git.md` → *PR Lifecycle*),
    which a run may end without delivering, so arm the check-in alongside the event wake, never instead of it, and drop it when THAT outcome is terminal.
    - `qa.yml` — static checks + local Playwright tests
@@ -75,8 +78,8 @@ Execute in order:
    - `pages-deploy.yml` — **ACTIONS-SOURCE ONLY.** Builds (only for a project
      with the CI-build opt-in), drops the `.github/pages-deny.txt` paths,
      publishes, retries GitHub's transient publish failure, then asserts the
-     root serves 200 and each denied path 404. Fill in `BUILD_CMD` and
-     `SITE_DIR` per its header. On a branch-source project the push already
+     root serves 200 and each denied path 404. Fill in `build-cmd` and
+     `site-dir` per its header. On a branch-source project the push already
      deploys, so it would be a second, competing deploy: it is not installed
      there. Installed here, before
      the first page exists, it is a deliberate no-op until `index.html`
@@ -91,33 +94,29 @@ Execute in order:
 
    Drop-in for a **branch-source** Pages project — copy verbatim, no edits.
 
-   ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, **`qa-live.yml`**
-   needs the exact `name:` of the project's own deploy workflow ("Pages Deploy"
-   for `pages-deploy.yml`) added to `workflow_run.workflows` — added, never
-   replacing `pages-build-deployment`. Omitting this step leaves the live QA
-   gate silently inert, which reads as healthy.
+   ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, the **`qa-live.yml`**
+   caller needs the exact `name:` of the project's own deploy workflow ("Pages
+   Deploy" for `pages-deploy.yml`) added to `workflow_run.workflows` — added,
+   never replacing `pages-build-deployment`. Omitting this step leaves the live
+   QA gate silently inert, which reads as healthy.
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W2).
 
-   **Scripts the installed files name by path — DERIVE the set, never hand-list
-   it** (a hand list falls behind: #321, #353, #355). Every file this bootstrap
-   installs is a caller — the workflows above, `templates/actions/*/action.yml`,
-   and the five `directives/*.md` from step 1 (a directive is a caller too) — all
-   fetched at step 1's SHA, never a moving `main`. Run this block; it is the same
-   derivation `/refresh-repo` runs (`refresh-repo.md` → *Deriving the referenced-script set*
-   explains each stage), and the plugin file it calls is resolved when this
-   command loads, so run it from here rather than from that command's text:
+   **Scripts a directive names by path — DERIVE the set, never hand-list it**
+   (a hand list falls behind: #321, #353, #355). The callers name no script, so
+   the five `directives/*.md` from step 1 are the callers here: `test.md` names
+   `browser-ladder.js` and `.github/scripts/package.json` beside it for local runs. Fetch them
+   at step 1's SHA, never a moving `main`. Run this block; it is the same
+   derivation `/refresh-repo` runs, and the plugin file it calls is resolved when
+   this command loads, so run it from here rather than from that command's text:
 
    ```bash
    sha="…step 1's SHA…"   # NOT main — that ref moves under you
    d="…step 1's scratch bare repo, holding $sha…"
-   callers="…every templates/workflows/*.yml this step installs, every
-            templates/actions/*/action.yml, and directives/global.md git.md
-            design.md test.md data.md (each as directives/<name>)…"
    buf=$(mktemp)
-   for c in $callers; do
+   for c in directives/global.md directives/git.md directives/design.md directives/test.md directives/data.md; do
      git -C "$d" show "$sha:$c" >>"$buf" \
        || { echo "FETCH FAILED: $c — bootstrap STOPS here" >&2; rm -f "$buf"; exit 1; }
-     printf '\n' >>"$buf"   # token boundary: a caller need not end in a newline
+     printf '\n' >>"$buf"   # token boundary: a file need not end in a newline
    done
    derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf") \
      || { echo "DERIVATION FAILED — bootstrap STOPS here" >&2; rm -f "$buf"; exit 1; }
@@ -126,49 +125,28 @@ Execute in order:
    ```
 
    Copy each derived
-   `.github/scripts/<f>` from `claude.directives/templates/scripts/<f>`. A missing
-   one fails its caller at step resolution, so a failed caller or script fetch
-   stops the bootstrap; never install a caller without what it names.
-   `check-contrast.js`, the WCAG guardrail `qa.yml` runs against the design
+   `.github/scripts/<f>` from `claude.directives/templates/scripts/<f>`. A failed
+   fetch stops the bootstrap; never ship a directive naming a file it did not
+   deliver. Install no composite under `.github/actions/` and no other script:
+   the shared workflows read `secret-scan`, `ui-suite`, `check-contrast.js` and
+   `check-ui-viewports.js` from `claude.directives` at the called commit.
+   `check-contrast.js`, the WCAG guardrail the `qa` caller runs against the design
    tokens, reads `styles/tokens.css` or `css/tokens.css` by default — elsewhere,
-   append `--tokens <file>` (repeat it per theme file). No script checks job
-   bounds or watcher names: keep them by hand (`docs/standards/cicd-setup.md` → 9c-bis, 9c-ter).
+   pass `--tokens <file>` in the caller's `contrast-args` input (repeat it per theme
+   file). No script checks job bounds or watcher names: keep them by hand
+   (`docs/standards/cicd-setup.md` → 9c-bis, 9c-ter).
 
-   **Composite actions (required by the qa workflows).** Copy
-   `claude.directives/templates/actions/<a>/**` → `.github/actions/<a>/**` —
-   **the whole directory, every file, not just `action.yml`.** The
-   `claude.directives/` prefix is load-bearing: this command runs with the
-   brand-new project as its working tree, where `templates/actions/` does not
-   exist, so a bare path names nothing and the actions never get installed
-   (Codex, #354). Every other source in these bootstrap steps is written the
-   same way, or as a raw URL. The qa workflows reference
-   the actions as `./.github/actions/*` and without them every qa run fails at
-   step resolution; and a composite can run a SIBLING by path — `ui-suite`
-   runs `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` at its
-   `Validate report-path` step — so a YAML-only copy leaves that step naming a
-   file that was never brought across, and every UI job dies there after
-   spending minutes on Node setup, dependencies and the browser download. This instruction listed the two
-   `action.yml` files by name until #354; that parenthetical was the hand-list
-   #353 exists because of. Nothing enforces this row — `check-action-siblings.py`
-   checks only that a composite's siblings are tracked, not that any carrier
-   installs them, because that is not decidable from prose (#354). Keeping this
-   correct is a review responsibility.
-
-   **Scheduled-job scripts** — not at bootstrap: they ride with
-   `cron-notify.yml`, which is added only when the project has a scheduled task
-   (`docs/standards/cicd-setup.md` Step 9f). `cron-notify.yml` names
-   `.github/scripts/notify-task.js` and `.github/scripts/notify-email.js` by
-   path, so once it is installed the derivation above (and a later
-   `/refresh-repo`) copies both (#398); Step 9f carries the commands.
-   `.github/scripts/package.json` is not cron-only: the qa workflows name it for
-   its `"type": "commonjs"`, so every project already has it. Then run `npm install` in `.github/scripts/` and **commit** the generated
-   `package-lock.json` (`cron-notify.yml`'s `cache:` step needs
-   `.github/scripts/package-lock.json`, same policy as the Playwright kit).
-   `notify-task.js` ships as a starter that emails via `notify-email.js`; it
-   **guards on the SMTP config and emits a notice if it is missing**, so the
-   scheduled job never crashes cryptically. The email secrets and variables are
-   needed only if the project sends email (NEW-REPO-USER-INSTRUCTIONS Step 1); the
-   project replaces the task body with its real notification.
+   **Scheduled-job scripts** — not at bootstrap: the project's own task,
+   `.github/scripts/notify-task.js`, rides with the `cron-notify.yml` caller,
+   which is added only when the project has a scheduled task
+   (`docs/standards/cicd-setup.md` Step 9f). `notify-email.js` and its
+   dependency come from the shared workflow at run time, so the project commits
+   neither them nor a lockfile. `notify-task.js` ships as a starter that emails
+   via `notify-email.js`; it **guards on the SMTP config and emits a notice if it
+   is missing**, so the scheduled job never crashes cryptically. The email
+   secrets and variables are needed only if the project sends email
+   (NEW-REPO-USER-INSTRUCTIONS Step 1); the project replaces the task body with
+   its real notification.
 
    **Design starter.** Copy `claude.directives/templates/styles/` (`tokens.css`,
    `components.css`, `components.js`) into `styles/`. They are the house style
@@ -232,16 +210,16 @@ Execute in order:
 7. **Install the Playwright kit.** Copy every file
    `claude.directives/templates/ui-tests/` ships at step 1's SHA (list it from the
    upstream tree; never a remembered file list) into `.github/scripts/ui-tests/`,
-   keeping its layout. The scripts that serve the kit do NOT arrive with it:
-   `check-ui-viewports.js` (the `ui-suite` composite names it by path — without it
-   every UI job fails at step resolution, #321) and `browser-ladder.js`
+   keeping its layout. `browser-ladder.js` does NOT arrive with it
    (`directives/test.md` → *Sandboxed local runs* tells every project to run it —
-   without it the documented command dies with `MODULE_NOT_FOUND`, #355) come from
-   step 5's derivation; confirm both are in `.github/scripts/` before going on.
+   without it the documented command dies with `MODULE_NOT_FOUND`, #355): it comes
+   from step 5's derivation, so confirm it is in `.github/scripts/` before going
+   on. The viewport gate, `check-ui-viewports.js`, is staged by the shared
+   workflows at run time and is not installed.
 
    The template kit ships no lockfile on purpose — run `npm install`
    inside `.github/scripts/ui-tests/` to generate a fresh one **and commit it**.
-   `qa.yml`'s `cache: npm` step hard-fails at `setup-node` without a committed
+   The shared qa run's `cache: npm` step hard-fails at `setup-node` without a committed
    `package-lock.json` (before Playwright even runs), so commit the lockfile and
    never add it to `.gitignore`. Confirm
    `playwright.config.js` resolves the live URL from the `APP_URL` variable, and
@@ -276,9 +254,9 @@ Execute in order:
    Then open a
    **draft** PR targeting `main` — its activity is subscribed harness-side, no
    tool call needed (`git.md` → *PR Lifecycle*). Fix
-   any CI failures before marking ready — note the `UI Tests` job is **skipped
-   while there's no `index.html` yet** (expected; the blocking gate is `Static
-   Checks`).
+   any CI failures before marking ready — note the `qa / UI Tests (local server)` job
+   **skips its suite while there's no `index.html` yet** (expected; the blocking
+   gate is `qa / Static Checks`).
 
 10. **Report to the human.** Lead with the outcome in plain language
     (`global.md` → *Plain Language First*): the project now carries the standard,

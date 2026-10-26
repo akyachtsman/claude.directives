@@ -1,38 +1,37 @@
-# shared-qa.yml — the callable version of templates/workflows/qa.yml
-# (#460 step 4, Phase A). A project calls it instead of carrying a copy:
+# shared-qa.yml — static checks + Playwright against a local server, called
+# by every project's .github/workflows/qa.yml (#460 step 4). The caller a
+# project writes is templates/workflows/qa.yml: its own triggers, permissions
+# and BUILD_PATHS, and one job that calls this file `@v1`, the moving tag on
+# the latest release (`@vX.Y.Z` or a commit SHA stays put). Releases are cut
+# by .github/workflows/release.yml: docs/internal/shared-workflows.md →
+# Releases.
 #
-#   jobs:
-#     qa:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@v1
-#       with:
-#         tests-dir: .github/scripts/ui-tests
-#       secrets:
-#         TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
-#         TEST_AUTH_EMAIL: ${{ secrets.TEST_AUTH_EMAIL }}
+# Jobs:
+#   static-checks — the secret-scan composite and the contrast guardrail; the
+#                   blocking gate.
+#   ui-tests      — Playwright against a local server through the ui-suite
+#                   composite (skipped with a notice only while the repo has
+#                   no index.html yet and no build). BLOCKING by default for
+#                   the static/no-backend tier, where the suite runs fully
+#                   against the bundled http-server; advisory-run: true is an
+#                   explicit, temporary opt-out, flipped back once the
+#                   blocking issue is fixed.
 #
-# `@v1` follows the latest release; `@vX.Y.Z` stays on one release. Releases
-# are cut by .github/workflows/release.yml: docs/internal/shared-workflows.md
-# → Releases.
+# The CI-build opt-in (global.md -> Hosting & Deployment): a caller sets
+# build-cmd and site-dir to the SAME values as its pages-deploy.yml. The UI job
+# then runs the build and serves site-dir, so it tests what is deployed.
+# Without the opt-in both stay as shipped: no build, the repo root is served.
+# It serves the tree UNFILTERED (dotfiles and deny-listed paths included), so
+# it tests the site's behaviour, not what the deploy leaves out; it does refuse
+# what that deploy refuses (a site-dir outside the repository, or a symlink in
+# the site), so a green PR cannot merge into a red deploy.
 #
-# A project with checks of its own (a path guard, unit tests, its own contrast
-# pairs) runs them in a SIBLING job of its caller and makes `qa` wait on it, so
-# a red project check still stops the suite. This is the slot: the called
-# workflow takes no command to run, because a sibling job keeps the project's
-# own setup (its Node or Python version, its install) in the project's file
-# (claude.prop pilot, 2026-10-25):
-#
-#   jobs:
-#     project-checks:
-#       name: Project Checks
-#       runs-on: ubuntu-latest
-#       timeout-minutes: 5
-#       steps:
-#         - uses: actions/checkout@v7
-#         - run: node --test tests/
-#     qa:
-#       needs: [project-checks]
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@v1
-#       ...
+# A project with checks of its own (a path guard, unit tests) runs them in a
+# SIBLING job of its caller and makes `qa` wait on it, so a red project check
+# still stops the suite. The called workflow takes no command to run, because a
+# sibling job keeps the project's own setup (its Node or Python version, its
+# install) in the project's file (claude.prop pilot, 2026-10-25). The template
+# shows the slot.
 #
 # A project that added contrast pairs to its own .github/scripts/check-contrast.js
 # names that copy in `contrast-script`; without it the shared run checks only
@@ -41,27 +40,19 @@
 # Secrets go by NAME, not `secrets: inherit`: GitHub documents `inherit` only
 # for callers in the same organization or enterprise, and the projects live
 # under a personal account (Codex, #467).
-# The caller keeps its own `on:` triggers, `permissions` and `concurrency`, and,
-# for a CI-build project, BUILD_PATHS in its top-level `env:` (the toolkit's
-# Pages edit reminder reads it there; this workflow never does).
 #
-# What differs from the copied template, and why: docs/internal/shared-workflows.md.
-# In short:
+# How a called workflow works, and why: docs/internal/shared-workflows.md. In
+# short:
 #   - Every shared file (the secret-scan and ui-suite composites, the scripts)
 #     comes from THIS repo at the exact commit the caller called
 #     (job.workflow_sha), checked out into .claude-directives/. A `./` path in a
 #     called workflow resolves against the caller's checkout, so nothing here
 #     names .github/actions/ or .github/scripts/ of the caller for a shared file.
-#   - Settings a project edited into its copy (`env:`) are inputs: `env` does
-#     not pass into a called workflow.
+#   - Settings are inputs: `env` does not pass into a called workflow.
 #   - The ui-suite composite reads check-ui-viewports.js (and the commonjs
 #     package.json beside it) from .github/scripts/ by fixed path, so the job
 #     stages those two files there from the shared checkout. A project's own copy
 #     is replaced for the run, with a notice when it differed.
-#
-# Fix a defect in BOTH this file and templates/workflows/qa.yml until the
-# templates become callers (Phase E); the template is still what every project
-# but the pilot runs.
 
 name: Shared QA — Static + UI Tests
 
@@ -69,15 +60,15 @@ on:
   workflow_call:
     inputs:
       tests-dir:
-        description: Directory holding the project's playwright.config.js and package.json (UI_TESTS_DIR in the template).
+        description: Directory holding the project's playwright.config.js and package.json.
         type: string
         default: .github/scripts/ui-tests
       build-cmd:
-        description: CI-build opt-in only. Runs from the repo root and writes site-dir; empty means no build (BUILD_CMD in the template).
+        description: CI-build opt-in only. Runs from the repo root and writes site-dir; empty means no build.
         type: string
         default: ''
       site-dir:
-        description: The directory served to the suite; '.' is the repo root (SITE_DIR in the template).
+        description: The directory served to the suite; '.' is the repo root.
         type: string
         default: '.'
       contrast-args:
@@ -161,7 +152,14 @@ jobs:
       # contrast-args. The shared copy runs from the shared checkout, where the
       # commonjs package.json beside it applies whatever the project's root
       # declares. A project's own copy (contrast-script) runs from the caller's
-      # checkout and needs its own package.json beside it, as in the template.
+      # checkout and needs its own package.json beside it: every .js under
+      # .github/scripts/ is CommonJS and runs only because that manifest says
+      # "type": "commonjs". Without it Node takes the module type from the ROOT
+      # package.json, and a Vite/Astro/SvelteKit root ("type": "module") kills
+      # the step with "require is not defined in ES module scope". With no
+      # stylesheet at all the check exits with a notice until /design-intake
+      # creates tokens.css; once the project has any CSS, a missing tokens
+      # file FAILS it.
       # Without contrast-script, a local .github/scripts/check-contrast.js that
       # differs from the shared one gets a warning: its added pairs are not
       # checked by this run (claude.prop pilot, 2026-10-25: 11 pairs checked of
@@ -192,6 +190,9 @@ jobs:
     name: UI Tests (local server)
     needs: [static-checks]
     runs-on: ubuntu-latest
+    # 120 is the fleet FLOOR for a ui-suite caller. Set HIGHER if your suite
+    # needs it, never lower, and raise it BEFORE adding projects. Why 120 (measurements, arithmetic, what it does NOT cover): the
+    # CALLER BOUND section of templates/actions/ui-suite/action.yml's header.
     timeout-minutes: ${{ inputs.ui-timeout-minutes }}
     env:
       BUILD_CMD: ${{ inputs.build-cmd }}
@@ -240,20 +241,36 @@ jobs:
             cp "$src" "$dst"
           done
 
-      # From here to the composite, the steps are the template's own.
+      # CI-build opt-in only: build exactly as the deploy does and serve its
+      # output, so the suite tests what is deployed rather than the unbuilt
+      # tree. With build-cmd empty these two steps are skipped.
       - name: Setup Node (build)
         if: env.BUILD_CMD != ''
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+          # setup-node v5+ turns npm caching ON by itself when the root
+          # package.json names npm in `packageManager` (or devEngines), and then
+          # needs a lockfile. This step never cached under v4; keep it that way.
           package-manager-cache: false
 
       - name: Build
         if: env.BUILD_CMD != ''
         run: bash -eo pipefail -c "$BUILD_CMD"
 
-      # Refuses what pages-deploy refuses, so a green PR cannot merge into a red
-      # deploy. The reasoning: templates/workflows/qa.yml, same step.
+      # Refuse what the deploy refuses, so a green PR cannot merge into a red
+      # deploy: a site directory resolving outside the repository, or a
+      # symlink in the site (the deploy publishes link TARGETS). A symlink fails
+      # where that deploy is installed (.github/workflows/pages-deploy.yml) or a
+      # build implies it (the opt-in is Actions-source); otherwise the repo is
+      # branch-source, where the managed build publishes links differently, so
+      # it only warns. Also exports the normalised directory ('' and '/'
+      # mean the repo root) to serve, as a step output. With no build and no
+      # index.html yet (a fresh repo) there is nothing to load: it skips the
+      # suite with a notice rather than hand Playwright a directory listing.
+      # The symlink scan runs from inside the site, so the excluded names
+      # apply only BELOW the root (a site directory that is itself called
+      # node_modules is still scanned).
       - name: Check the site directory
         id: site
         run: |
@@ -290,6 +307,9 @@ jobs:
           app-url: http://localhost:8080
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
           test-auth-email: ${{ secrets.TEST_AUTH_EMAIL }}
+          # VARIABLES, not secrets: selectors and a URL substring, and a masked one
+          # is unreadable in a failure message. Empty keeps the windowed answer (#320)
+          # and S2 reading the gate clearing as success (#379).
           test-auth-ready-selector: ${{ vars.TEST_AUTH_READY_SELECTOR }}
           test-auth-ready-request: ${{ vars.TEST_AUTH_READY_REQUEST }}
           test-auth-success-selector: ${{ vars.TEST_AUTH_SUCCESS_SELECTOR }}
@@ -297,4 +317,10 @@ jobs:
           app-pages: ${{ vars.APP_PAGES }}
           start-local-server: 'true'
           server-root: ${{ steps.site.outputs.root }}
+          # advisory-run defaults to false: blocking is the default posture for
+          # the static/no-backend tier, where the suite runs fully against the
+          # bundled local server. A default of true would hand every project a
+          # UI suite whose failures show green. Auth/backend-gated scenarios
+          # self-skip when no credential is available (TEST_AUTH_CREDENTIAL
+          # empty and the login form ships none), and qa-live stays the live gate.
           advisory-run: ${{ inputs.advisory-run }}

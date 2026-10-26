@@ -26,7 +26,7 @@
       ]
     },
     "called-workflows": {
-      "mode": "called from a project's own thin workflow by `uses:` at a pinned tag \u2014 no copy; a change reaches a project when its pin moves (#460 step 4; during the pilot only claude.prop calls them)",
+      "mode": "called from a project's own thin workflow by `uses:` at a pinned tag \u2014 no copy; a change reaches a project when its pin moves: a release moves `@v1` (#460 step 4; since Phase E every templates/workflows/* is a caller of one)",
       "paths": [
         ".github/workflows/shared-qa.yml",
         ".github/workflows/shared-qa-live.yml",

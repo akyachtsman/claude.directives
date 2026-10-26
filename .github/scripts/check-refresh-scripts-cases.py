@@ -29,31 +29,36 @@ side effect (a file written, a marker kept) checks the file itself.
 MUTANTS. Each script is swapped by its own variable, copied into a temp
 directory beside the real siblings it sources or runs (the installed layout):
 REFRESH_STAMP_BIN, REFRESH_DELTA_BIN, REFRESH_DRIFT_BIN, REFRESH_MERGE_BIN,
-REFRESH_CALLERS_BIN, REFRESH_BROKEN_REFS_BIN, REFRESH_HOOK_INSTALL_BIN,
-KIT_DEFECTS_BIN, REFRESH_VARS_BIN, REFRESH_LIB_BIN, HOUSE_STYLE_INVENTORY_BIN,
-KIT_DIRS_BIN.
+REFRESH_BROKEN_REFS_BIN, REFRESH_HOOK_INSTALL_BIN, KIT_DEFECTS_BIN,
+REFRESH_LIB_BIN, HOUSE_STYLE_INVENTORY_BIN, KIT_DIRS_BIN.
+
+PHASE E OF #460 STEP 4 (owner ruling, 2026-10-26: the full-copy workflow
+templates are retired; templates/workflows/* are callers). A refresh installs,
+compares and requires no workflow, no composite and no script but those a
+directive names (derive-scripts.sh over directives/*.md: the fixture's TEST_MD).
+Drift says OWN for a workflow at a template name that calls no shared workflow,
+and SHARED-COPY for a copy of a composite, or of a script no directive names,
+with whatever in the project still names it (a composite this run says to
+delete does not count). refresh-callers.sh and refresh-vars.sh are deleted,
+with their cases: no workflow is installed, so there is no caller set and no
+template whose new reads to list; a new variable or secret arrives with a
+release, which the PIN line reports. MEASURED 2026-10-26 against the scripts
+at d7d6235, each swapped in alone: REFRESH_DRIFT_BIN -> 17 (the OWN and
+SHARED-COPY cases and both SUMMARYs; and, with the new lib mapping no workflow
+to a template, every CALLER and PIN case, as the old loop reads a caller as
+NO-TEMPLATE before it looks); REFRESH_STAMP_BIN -> 4 (the full-copy cron
+lockfile, both caller-stamp cases, the directive-named absent script);
+REFRESH_LIB_BIN -> the two workflow CANNOT MERGE cases.
 
 A PROJECT ON CALLERS (#460 step 4; claude.prop pilot, 2026-10-25). A workflow
 that calls a shared workflow (`uses: akyachtsman/claude.directives/.github/
-workflows/shared-<name>.yml@<ref>`) is reported as CALLER by drift, is left out
-of refresh-callers.sh's set (so the composites and scripts its template
-reaches are never offered back), and names its kit in `tests-dir:`, which
-kit-dirs.sh reads. The stamp prints one `caller:` line each and, as before,
-never requires the deleted composites or check-ui-viewports.js. MEASURED
-against the scripts at f667e89, each swapped in alone: REFRESH_DRIFT_BIN -> the
-CALLER and SUMMARY cases; REFRESH_CALLERS_BIN -> the caller-set case;
-KIT_DIRS_BIN -> the tests-dir case; REFRESH_STAMP_BIN -> the `caller:` line
-case only. The stamp's "nothing deleted is required" cases hold against the
-old stamp too: it already read each workflow's own text, so they pin that
-behaviour rather than prove a fix. REFRESH_LIB_BIN (no refresh_caller_of) ->
-7: every one of the above, plus the older caller-set case, whose output then
-carries the missing function's error. The claude.prop refresh (2026-10-26)
-added two: refresh-vars.sh names a caller instead of comparing its template,
-and refresh-callers.sh gives a caller's template no "absent here" hint.
-MEASURED against the scripts at 137ed12: REFRESH_VARS_BIN -> both callers-vars
-cases; REFRESH_CALLERS_BIN -> the no-hint case only. The same refresh's
-report asked for the PIN line under each CALLER: REFRESH_DRIFT_BIN at aa53fa4
--> the four PIN cases.
+workflows/shared-<name>.yml@<ref>`) is reported as CALLER by drift, with a PIN
+line saying what its ref runs against the head, and names its kit in
+`tests-dir:`, which kit-dirs.sh reads. MEASURED against the scripts at
+f667e89, each swapped in alone: REFRESH_DRIFT_BIN -> the CALLER and SUMMARY
+cases; KIT_DIRS_BIN -> the tests-dir case. The PIN line (claude.prop refresh,
+2026-10-26): REFRESH_DRIFT_BIN at aa53fa4 -> the four PIN cases. The caller-set
+and caller-vars cases of that pilot went with their scripts (Phase E, above).
 
 THE HOUSE STYLE (#470, 2026-10-25). A project marked as on the house style
 (.claude/directive-sync.json -> house_style: true) has styles/components.css
@@ -85,8 +90,8 @@ pointed at the fixture), each swapped in alone:
   REFRESH_STAMP_BIN = the old refresh-stamp.sh -> all 14 stamp cases: the
     exit status, the kept verdict and the re-run without refresh-delta.sh,
     the base binding, the lockfile only with the cron kit (and, with the
-    verdict burned by the first refusal, its "WITH its lockfile" re-run), and
-    every kit-directory decline case;
+    verdict burned by the first refusal, its "WITH its lockfile" re-run;
+    both retired in Phase E), and every kit-directory decline case;
   REFRESH_DELTA_BIN = the old refresh-delta.sh -> the three delta cases, and
     the 11 stamp cases that need its base marker (a verdict without one is
     refused, which is the base binding working);
@@ -101,47 +106,14 @@ reverted at a time:
   drift's mode comparison removed -> MODE and the summary;
   the hook's OK lines removed -> the three hook-state cases;
   merge --write ignoring conflicts -> both conflict cases;
-  the callers' composite closure removed -> the caller-set case;
+  the callers' composite closure removed -> the caller-set case (deleted in
+    Phase E, with refresh-callers.sh);
   kit-defects running an empty Check block -> the no-Check-block case.
 
-NEW REPOSITORY VARIABLES AND SECRETS (owner ruling, 2026-10-13: after the
-pilots merged, QA — UI Tests (live) went red on an unset APP_URL). Before
-refresh-vars.sh no step looked, so REFRESH_VARS_BIN = an empty file (the
-pre-change state) -> all 10 vars cases. Then the new script with one feature
-reverted at a time, MEASURED 2026-10-13:
-  the stamp baseline removed (every read new) -> the read-present-at-the-stamp,
-    no-OK-line-with-new-reads and all-present-at-the-stamp cases;
-  the GITHUB_TOKEN exclusion removed -> the GITHUB_TOKEN case (+ the count);
-  `secrets.` reads dropped, or the bracket form dropped -> the secrets case
-    (+ the count);
-  the OK line removed -> both OK-line cases;
-  the installed-only filter removed (every template at the pin) -> the
-    not-installed case (+ the count);
-  a template absent at the stamp skipped -> the newly-installed case;
-  the Phase 2 marker requirement removed -> the after-the-stamp case.
-Codex on #450 then found the comment stripping and the template baseline
-wrong (a `#` inside a quoted string or opening a block-scalar line hid a read;
-a CUSTOM copy that had dropped a read still counted as reading it). Comments
-are no longer stripped -- both sides are read alike, so only a NEW mention
-lists -- and the baseline is the project's own files at the stamp commit. The
-script before those fixes (ff2e2b4) fails the block-scalar, new-comment,
-custom-dropped and count cases; the one before that (bb3e993), the quoted-#
-case; the one before that (f97e46a), the installed-now case. Round four: a
-name the project only commented on, made live upstream, was hidden by the
-raw-text baseline; each side is now read whole AND with comments set aside,
-and 2d73710 fails the comment-goes-live case. Round five: inert text naming a
-variable (`name: … vars.X …`) counted as a baseline read; only what GitHub
-evaluates (`${{ }}` spans, a bare `if:`) is read now, and 921f9e7 fails the
-inert-text case. Checked against every shipped template: no read is lost.
-Round six: a folded `if: >` went unread and a first install listed a
-commented-out read. The whole/comment-free union gave way to one light YAML
-reader (block scalars are data, `#`-led lines outside them are comments);
-bada2fe fails the folded-if and commented-out cases. Round seven: a read in a
-trailing comment of the project's file hid one made live upstream; the
-baseline side now drops a mid-line `#` onward (the incoming side keeps it),
-and d4b92e8 fails the trailing-comment case. Round eight: a `${{` folded over
-two lines lost its continuation; the incoming side now follows an open span
-to its `}}`, and 4c41b1e fails the folded-expression case.
+NEW REPOSITORY VARIABLES AND SECRETS (owner ruling, 2026-10-13). refresh-vars.sh
+listed the variables and secrets a refresh's new templates read; it and its
+eight rounds of cases were deleted in Phase E (above), since no refresh installs
+a workflow now. Its history is in git (d7d6235).
 
 DRIFT OVER .github/scripts/* (owner-approved 2026-10-13, the claude.prop
 pilot: five script templates in the delta were classified by hand, because
@@ -205,10 +177,8 @@ Round 3 (Codex, #457): a key ending in a newline survives command substitution
 cases that assert the count (3, not 2).
 Round 4 (claude.prop pilot, 2026-10-15): the line of a record that BINDS --
 drift's CUSTOM, the stamp's KEPT, file and kit-directory forms -- is cut to 60
-characters too; and refresh-vars.sh baselines at the commit that WROTE the
-stamp, not the last one touching the sync file. MEASURED against bde28c9: the
-drift fails the binding-cut case, the stamp both KEPT cases, refresh-vars.sh
-the baseline case and the read it hides.
+characters too. MEASURED against bde28c9: the drift fails the binding-cut
+case, the stamp both KEPT cases.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -236,11 +206,9 @@ BINS = {
     "refresh-delta.sh": "REFRESH_DELTA_BIN",
     "refresh-drift.sh": "REFRESH_DRIFT_BIN",
     "refresh-merge.sh": "REFRESH_MERGE_BIN",
-    "refresh-callers.sh": "REFRESH_CALLERS_BIN",
     "refresh-broken-refs.sh": "REFRESH_BROKEN_REFS_BIN",
     "refresh-hook-install.sh": "REFRESH_HOOK_INSTALL_BIN",
     "kit-defects.sh": "KIT_DEFECTS_BIN",
-    "refresh-vars.sh": "REFRESH_VARS_BIN",
     "refresh-lib.sh": "REFRESH_LIB_BIN",
     "house-style-inventory.sh": "HOUSE_STYLE_INVENTORY_BIN",
     "kit-dirs.sh": "KIT_DIRS_BIN",
@@ -298,16 +266,6 @@ ACTION = """runs:
     - run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"
       shell: bash
 """
-CRON = """on:
-  schedule: [{cron: '0 0 * * *'}]
-jobs:
-  run:
-    steps:
-      - working-directory: .github/scripts
-        run: npm install
-      # needs .github/scripts/notify-email.js and .github/scripts/package.json
-      - run: node "$GITHUB_WORKSPACE/.github/scripts/notify-task.js"
-"""
 KIT_DEFECTS = """# UI-test kit defects
 
 ## KD-1 — a fixture defect
@@ -324,42 +282,18 @@ KIT_DEFECTS = """# UI-test kit defects
 - **Revision:** 1
 - **Bug:** no check block here.
 """
-# The live workflow reads repository variables and secrets; the release adds
-# vars.APP_URL and secrets.NEW_SECRET (the pilots' unset APP_URL, 2026-10-13),
-# and also a GITHUB_TOKEN read, a name only a COMMENT mentions, a read after a
-# quoted `#` and a `#`-led block-scalar line -- each NEW at the head.
-LIVE_S = """name: QA Live
-jobs:
-  live:
-    steps:
-      - uses: ./.github/actions/ui-suite
-        with:
-          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
-          ready: ${{ vars.TEST_AUTH_READY_SELECTOR }}
+# The directives name the scripts a refresh installs (Phase E of #460 step 4):
+# only those are compared and required. check-ui-viewports.js and
+# notify-email.js are named by no directive, so an installed copy is a
+# SHARED-COPY, read by the shared workflows from claude.directives.
+TEST_MD = """# test
+Run .github/scripts/ladder.js locally, with .github/scripts/package.json beside it.
+The guards: .github/scripts/guard.py, .github/scripts/lint.py and
+.github/scripts/check-contrast.js.
 """
-LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
-          app-url: ${{ github.event.inputs.app_url || vars.APP_URL }}
-          extra: ${{ secrets['New_Secret'] }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - run: echo "prefix # ${{ secrets.HASH_QUOTED }}"
-      - uses: ./.github/actions/notify
-        if: vars.GATE == 'on'
-        with:
-          payload: |
-            #${{ secrets.BLOCK_HASH }}
-      - name: gated
-        if: >
-          vars.DEPLOY_ENABLED == 'true'
-        run: echo gated
-      - name: folded expression
-        env:
-          ON: ${{ github.ref == 'refs/heads/main' ||
-            vars.FOLDED_FLAG }}
-      - name: optional db
-        env:
-          # DB_URL: ${{ vars.OPTIONAL_DB }}
-          X: "1"
-"""
+LADDER_S = (QA_S.replace("name: QA\n", "// ladder\n").replace("      - uses: ./.github/actions/ui-suite\n", "")
+            .replace("#", "//"))
+LADDER_H = LADDER_S.replace("// bottom-3\n", "// bottom-3 (upstream fix)\n")
 # The house style (#470): the head adds a token NAME (--color-new) and changes
 # the components, so a marked project at the stamp has both to take.
 TOKENS_S = """:root {
@@ -379,8 +313,6 @@ SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
 S_FILES = {
     "templates/workflows/qa.yml": QA_S,
     "templates/workflows/sample-wf.yml": "name: Sample WF\n# v1\n",
-    "templates/workflows/cron-notify.yml": CRON,
-    "templates/workflows/qa-live.yml": LIVE_S,
     "templates/actions/ui-suite/action.yml": ACTION,
     "templates/actions/ui-suite/validate-report-path.py": "print('ok')\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v1\n",
@@ -391,6 +323,7 @@ S_FILES = {
     "templates/scripts/notify-email.js": "module.exports = {};\n",
     "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1')\n",
     "templates/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint')\n",
+    "templates/scripts/ladder.js": LADDER_S,
     "templates/ui-tests/tests/app.spec.js": "// spec\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v1\n",
     "templates/ui-tests/tests/lib/auth.js": "// auth\n",
@@ -402,17 +335,17 @@ S_FILES = {
     "templates/styles/components.css": COMP_S,
     "docs/standards/kit-defects.md": KIT_DEFECTS,
     "docs/guide.md": "a guide\n",
-    **{f"directives/{d}.md": f"# {d}\n" for d in ("global", "git", "design", "test", "data")},
+    **{f"directives/{d}.md": f"# {d}\n" for d in ("global", "git", "design", "data")},
+    "directives/test.md": TEST_MD,
 }
 H_FILES = {
     **S_FILES,
     "templates/workflows/qa.yml": QA_H,
     "templates/workflows/sample-wf.yml": "name: Sample WF\n# v2\n",
-    "templates/workflows/qa-live.yml": LIVE_H,
-    "templates/workflows/new.yml": "name: New\n# read: ${{ vars.FROM_NEW }}\nenv:\n  X: ${{ vars.FROM_NEW }}\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v2\n",
     "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v2')\n",
+    "templates/scripts/ladder.js": LADDER_H,
     "templates/styles/tokens.css": TOKENS_H,
     "templates/styles/components.css": COMP_H,
     "templates/styles/components.js": JS_H,
@@ -457,7 +390,10 @@ def blob_id(rev, path):
 
 # ---- downstream projects ----------------------------------------------------
 INSTALLED_WORKFLOWS = ("qa.yml", "sample-wf.yml")
-INSTALLED_SCRIPTS = ("check-contrast.js", "check-ui-viewports.js", "package.json")
+# Every script a directive names (TEST_MD), plus check-ui-viewports.js, a copy
+# a full-copy qa.yml once needed and nothing names now (a SHARED-COPY).
+INSTALLED_SCRIPTS = ("check-contrast.js", "check-ui-viewports.js", "package.json",
+                     "guard.py", "lint.py", "ladder.js")
 
 
 def installed(files, workflows=INSTALLED_WORKFLOWS, scripts=INSTALLED_SCRIPTS):
@@ -610,51 +546,51 @@ expect("delta: a stamp already at head says so, never silence",
        run(r, "refresh-delta.sh"), 0, f"OK: stamp already at {H}")
 
 # ---- item 2: the stamp keeps Phase 2's verdict through a refusal -------------
-r = project("stamp-refuse", changes={".github/workflows/sample-wf.yml": S_FILES["templates/workflows/sample-wf.yml"]})
+r = project("stamp-refuse", changes={".github/scripts/guard.py": S_FILES["templates/scripts/guard.py"]})
 run(r, "refresh-delta.sh")
 rc, out = res = run(r, "refresh-stamp.sh")
-expect("stamp: a refused stamp exits non-zero", res, 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
+expect("stamp: a refused stamp exits non-zero", res, 1, "UNAPPLIED: .github/scripts/guard.py differs")
 check("stamp: a refused stamp keeps Phase 2's verdict (marker, base and delta)",
       all(marker(r, n).is_file() for n in ("classified", "base", "delta")),
       f"markers after a refusal: {[n for n in ('classified', 'base', 'delta') if marker(r, n).is_file()]}")
-m = re.search(r"sample-wf\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
+m = re.search(r"guard\.py differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
 if m:
     # A record without `local` (the pre-#451 shape) binds nothing: still refused.
-    set_kept(r, ".github/workflows/sample-wf.yml", {"blob": m.group(1), "reason": "a local watch list"})
+    set_kept(r, ".github/scripts/guard.py", {"blob": m.group(1), "reason": "a local guard"})
     expect("stamp: a record without a local blob refuses, never inherits the approval (Codex, #451)",
-           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/scripts/guard.py differs")
     # Both blobs bound but a blank reason: drift shows it as needing a reason,
     # so the stamp must not honour it either (Codex, #451).
-    set_kept(r, ".github/workflows/sample-wf.yml",
+    set_kept(r, ".github/scripts/guard.py",
              {"blob": m.group(1), "local": m.group(2), "reason": "  \n"})
     expect("stamp: a record with a blank reason refuses, as drift reports it",
-           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
-    set_kept(r, ".github/workflows/sample-wf.yml",
-             {"blob": m.group(1), "local": m.group(2), "reason": "a local watch list"})
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/scripts/guard.py differs")
+    set_kept(r, ".github/scripts/guard.py",
+             {"blob": m.group(1), "local": m.group(2), "reason": "a local guard"})
 res = run(r, "refresh-stamp.sh")
-r2 = project("stamp-local-moved", changes={".github/workflows/sample-wf.yml": S_FILES["templates/workflows/sample-wf.yml"]})
+r2 = project("stamp-local-moved", changes={".github/scripts/guard.py": S_FILES["templates/scripts/guard.py"]})
 run(r2, "refresh-delta.sh")
 rc2, out2 = run(r2, "refresh-stamp.sh")
-m2 = re.search(r"sample-wf\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out2)
+m2 = re.search(r"guard\.py differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out2)
 check("stamp: a refusal prints the installed copy's local blob to record", bool(m2), out2)
 if m2:
-    set_kept(r2, ".github/workflows/sample-wf.yml",
-             {"blob": m2.group(1), "local": m2.group(2), "reason": "a local watch list"})
-    (r2 / ".github/workflows/sample-wf.yml").write_text(
-        (r2 / ".github/workflows/sample-wf.yml").read_text() + "# edited after approval\n")
+    set_kept(r2, ".github/scripts/guard.py",
+             {"blob": m2.group(1), "local": m2.group(2), "reason": "a local guard"})
+    (r2 / ".github/scripts/guard.py").write_text(
+        (r2 / ".github/scripts/guard.py").read_text() + "# edited after approval\n")
     expect("stamp: a record whose local blob no longer matches the file refuses (Codex, #451)",
-           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/scripts/guard.py differs")
     # The same approval, then only the line endings change, in a project with
     # core.autocrlf on: a filtered hash would map the CRLF file back to the
     # approved blob; the binding is to the bytes on disk (Codex, #451).
-    ci = r2 / ".github/workflows/sample-wf.yml"
-    approved = S_FILES["templates/workflows/sample-wf.yml"]
-    set_kept(r2, ".github/workflows/sample-wf.yml",
-             {"blob": m2.group(1), "local": obj_id(approved), "reason": "a local watch list"})
+    ci = r2 / ".github/scripts/guard.py"
+    approved = S_FILES["templates/scripts/guard.py"]
+    set_kept(r2, ".github/scripts/guard.py",
+             {"blob": m2.group(1), "local": obj_id(approved), "reason": "a local guard"})
     ci.write_bytes(approved.replace("\n", "\r\n").encode())
     subprocess.run(["git", "-C", str(r2), "config", "core.autocrlf", "true"], check=True)
     expect("stamp: a CRLF rewrite under core.autocrlf no longer matches the approved local blob",
-           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/scripts/guard.py differs")
 expect("stamp: the re-run after recording a reason stamps without refresh-delta.sh",
        res, 0, f"stamped: {H}")
 check("stamp: a successful stamp consumes the verdict",
@@ -680,7 +616,7 @@ check("stamp: ...and still consumes the verdict",
 expect("stamp: with the verdict consumed, a third run refuses as NOT classified",
        run(r, "refresh-stamp.sh"), 1, "was NOT classified")
 
-r = project("stamp-fetch-fails", changes={".github/workflows/sample-wf.yml": S_FILES["templates/workflows/sample-wf.yml"]})
+r = project("stamp-fetch-fails", changes={".github/scripts/guard.py": S_FILES["templates/scripts/guard.py"]})
 run(r, "refresh-delta.sh")
 res = run(r, "refresh-stamp.sh", env=failing("git", "fetch"))
 expect("stamp: an upstream tree that cannot be fetched is exit 2 (could not run), not a refusal (Codex, #449)",
@@ -697,20 +633,28 @@ p.write_text(json.dumps(d))
 expect("stamp: a stamp changed since Phase 2 listed the delta refuses (base bound)",
        run(r, "refresh-stamp.sh"), 1, "was NOT classified")
 
-# ---- item 3: the lockfile only with the scheduled-task kit --------------------
+# ---- item 3: no lockfile is required, cron or not -------------------------------
+# Phase E of #460 step 4: the scheduled task's npm install runs in
+# shared-cron-notify.yml, so a project's package.json needs no lockfile even
+# beside an old full-copy cron workflow (the stamp once refused that without one).
+FULL_CRON = """on:
+  schedule: [{cron: '0 0 * * *'}]
+jobs:
+  run:
+    steps:
+      - working-directory: .github/scripts
+        run: npm install
+      - run: node "$GITHUB_WORKSPACE/.github/scripts/notify-task.js"
+"""
 r = project("lock-none")
 run(r, "refresh-delta.sh")
-expect("stamp: package.json without the cron kit needs no lockfile",
+expect("stamp: package.json needs no lockfile",
        run(r, "refresh-stamp.sh"), 0, f"stamped: {H}", absent="package-lock.json")
-r = project("lock-cron", workflows=INSTALLED_WORKFLOWS + ("cron-notify.yml",),
-            scripts=INSTALLED_SCRIPTS + ("notify-task.js", "notify-email.js"))
+r = project("lock-cron", scripts=INSTALLED_SCRIPTS + ("notify-task.js", "notify-email.js"),
+            changes={".github/workflows/cron-notify.yml": FULL_CRON})
 run(r, "refresh-delta.sh")
-expect("stamp: the cron kit without a lockfile is refused, naming the kit",
-       run(r, "refresh-stamp.sh"), 1,
-       "package-lock.json is absent but required by the scheduled-task kit")
-(r / ".github/scripts/package-lock.json").write_text("{}\n")
-expect("stamp: the cron kit WITH its lockfile stamps",
-       run(r, "refresh-stamp.sh"), 0, f"stamped: {H}")
+expect("stamp: an old full-copy cron workflow requires no lockfile either (Phase E)",
+       run(r, "refresh-stamp.sh"), 0, f"stamped: {H}", absent="package-lock.json")
 
 # ---- item 10: one entry declines a whole kit subdirectory ---------------------
 LIB_GONE = {".github/scripts/ui-tests/tests/lib/fixtures.js": None,
@@ -770,8 +714,14 @@ expect("stamp: the kit ROOT is never a one-step decline",
        run(r, "refresh-stamp.sh"), 1, "tests/lib/auth.js is absent but required")
 
 # ---- items 5-7: drift at the pin, STALE vs CUSTOM, modes ----------------------
+# At the stamp, guard.py and ladder.js are the stamp-era templates (STALE once
+# the head moves them); check-contrast.js is edited locally (CUSTOM); the hook
+# lost its exec bit (STALE + MODE). The workflows are never compared (Phase E of
+# #460 step 4): qa.yml, edited locally, and sample-wf.yml are OWN.
+LADDER_LOCAL = LADDER_S.replace("// top-1\n", "// top-1 (local)\n")
 DRIFTED = {
-    ".github/workflows/qa.yml": QA_S.replace("# top-1\n", "# top-1 (local)\n"),   # CUSTOM
+    ".github/scripts/check-contrast.js": "require('fs'); // local\n",              # CUSTOM
+    ".github/workflows/qa.yml": QA_S.replace("# top-1\n", "# top-1 (local)\n"),    # OWN
     ".claude/hooks/session-start.sh": ("#!/usr/bin/env bash\necho v1\n", False),   # STALE + MODE
 }
 r = project("drift", at=S_FILES, changes=DRIFTED)
@@ -779,16 +729,32 @@ run(r, "refresh-delta.sh")
 res = run(r, "refresh-drift.sh")
 expect("drift: it reads Phase 2's pin", res, 0, f"pinned: {H} (Phase 2's classified head)")
 expect("drift: a copy equal to the stamp-era template is STALE",
-       res, 0, "STALE: .github/workflows/sample-wf.yml")
+       res, 0, "STALE: .github/scripts/guard.py")
 expect("drift: a copy that differs from the stamp-era template too is CUSTOM",
-       res, 0, "CUSTOM: .github/workflows/qa.yml")
+       res, 0, "CUSTOM: .github/scripts/check-contrast.js")
 expect("drift: a lost executable bit is a MODE line, not DRIFT",
        res, 0, "MODE: .claude/hooks/session-start.sh is 100644, the template is 100755")
-expect("drift: the summary counts each class", res, 0, "2 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
+expect("drift: the summary counts each class",
+       res, 0, f"SUMMARY: 6 installed file(s) compared at {H} — 2 match, 3 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE, 2 OWN, 2 SHARED-COPY")
+# Phase E of #460 step 4 (owner ruling, 2026-10-26: the full-copy workflow
+# templates are retired). A workflow that calls no shared workflow is OWN --
+# never compared, merged or moved onto the caller -- even when edited; a copy of
+# a composite or of a script no directive names is a SHARED-COPY, named with
+# whatever in the project still names it.
+expect("drift: a workflow at a template name that calls no shared workflow is OWN, never CUSTOM or STALE (Phase E)",
+       res, 0, "OWN: .github/workflows/qa.yml — calls no shared workflow",
+       absent="CUSTOM: .github/workflows/qa.yml")
+expect("drift: ...an unedited one too",
+       res, 0, "OWN: .github/workflows/sample-wf.yml", absent="STALE: .github/workflows/sample-wf.yml")
+expect("drift: a composite copy is ONE SHARED-COPY line, naming the workflow that still uses it (Phase E)",
+       res, 0, "SHARED-COPY: .github/actions/ui-suite/ — the shared workflows read templates/actions/ui-suite from claude.directives at the called commit; not compared. Still named by: .github/workflows/qa.yml -- keep it while they do")
+expect("drift: a script no directive names is a SHARED-COPY, not compared (Phase E)",
+       res, 0, "SHARED-COPY: .github/scripts/check-ui-viewports.js — no directive names it",
+       absent="STALE: .github/scripts/check-ui-viewports.js")
 
 # .github/scripts/* (claude.prop pilot, 2026-10-13: five script templates in
 # the delta were classified by hand). Same classes, same SUMMARY.
-r = project("drift-scripts", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "lint.py"), changes={
+r = project("drift-scripts", at=S_FILES, changes={
     ".github/scripts/check-contrast.js": "require('fs'); // local\n",         # CUSTOM
     ".github/scripts/lint.py": (S_FILES["templates/scripts/lint.py"], False),  # match + MODE
     ".github/scripts/mine.py": "print('the project own')\n",                 # no template
@@ -806,9 +772,9 @@ expect("drift: a CUSTOM script with no refresh_kept record is the plain line",
 expect("drift: a script whose exec bit differs from the template's is a MODE line",
        res, 0, "MODE: .github/scripts/lint.py is 100644, the template is 100755")
 expect("drift: the scripts are counted -- unchanged ones as match -- in the same SUMMARY",
-       res, 0, f"SUMMARY: 10 installed file(s) compared at {H} — 5 match, 4 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
+       res, 0, f"SUMMARY: 6 installed file(s) compared at {H} — 2 match, 3 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
 expect("drift: an unchanged script gets no line of its own",
-       res, 0, "SUMMARY:", absent="check-ui-viewports.js")
+       res, 0, "SUMMARY:", absent=".github/scripts/package.json")
 expect("drift: a project-own script with no template is not listed (not even NO-TEMPLATE)",
        res, 0, "SUMMARY:", absent="mine.py")
 expect("drift: package-lock.json (never shipped) is not listed",
@@ -840,7 +806,7 @@ for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/", ".gi
            run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent=".github/scripts/package.json")
 # ...but a kit AT the scripts root does not take the standard scripts with it:
 # a script the kit template does not ship is still compared (Codex, #451).
-r = project("drift-scripts-kitroot", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("lint.py",), changes={
+r = project("drift-scripts-kitroot", at=S_FILES, changes={
     ".github/workflows/sample-wf.yml": "name: Sample WF\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
     ".github/scripts/package.json": "{}\n",
     ".github/scripts/playwright.config.js": "// config\n",
@@ -859,12 +825,12 @@ expect("drift: ...while the kit's own package.json stays out of the script loop"
 # copy's own blob (`local`), so a later local edit never inherits the approval
 # (Codex, #451).
 CONTRAST_LOCAL = "require('fs'); // house palette\n"
-QA_LOCAL = DRIFTED[".github/workflows/qa.yml"]
-r = project("drift-kept", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "lint.py"), changes={
+PKG_LOCAL = '{"type": "commonjs", "private": true}\n'
+r = project("drift-kept", at=S_FILES, changes={
     ".github/scripts/check-contrast.js": CONTRAST_LOCAL,
     ".github/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1, local')\n",
     ".github/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint, edited after approval')\n",
-    ".github/workflows/qa.yml": QA_LOCAL,
+    ".github/scripts/package.json": PKG_LOCAL,
 }, sync_extra={"refresh_kept": {
     ".github/scripts/check-contrast.js": {"blob": blob_id(H, "templates/scripts/check-contrast.js"),
                                           "local": obj_id(CONTRAST_LOCAL), "reason": "the house palette"},
@@ -873,15 +839,15 @@ r = project("drift-kept", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "
     ".github/scripts/lint.py": {"blob": blob_id(H, "templates/scripts/lint.py"),
                                 "local": obj_id("#!/usr/bin/env python3\nprint('lint, as approved')\n"),
                                 "reason": "approved content"},
-    ".github/workflows/qa.yml": {"blob": blob_id(H, "templates/workflows/qa.yml"),
-                                 "reason": "a local top comment"},
+    ".github/scripts/package.json": {"blob": blob_id(H, "templates/scripts/package.json"),
+                                     "reason": "a private package"},
 }})
 run(r, "refresh-delta.sh")
 res = DRIFT_KEPT = run(r, "refresh-drift.sh")
 expect("drift: a CUSTOM script whose record binds template AND local content carries its reason",
        res, 0, "CUSTOM: .github/scripts/check-contrast.js (recorded in refresh_kept: the house palette) — ")
 expect("drift: a record with no local blob is shown but NOT honoured (Codex, #451)",
-       res, 0, "CUSTOM: .github/workflows/qa.yml (refresh_kept says \"a local top comment\", but the record binds no local content")
+       res, 0, "CUSTOM: .github/scripts/package.json (refresh_kept says \"a private package\", but the record binds no local content")
 expect("drift: a file edited since its record was made does not inherit the approval (Codex, #451)",
        res, 0, "CUSTOM: .github/scripts/lint.py (refresh_kept says \"approved content\", but this file changed since it was recorded")
 expect("drift: a record bound to an OLD template blob no longer covers it: the plain line",
@@ -994,35 +960,46 @@ expect("drift: it reads Phase 2's pin, not main (a copy current AT the pin is no
        run(r, "refresh-drift.sh"), 0, "0 STALE, 0 CUSTOM, 0 DRIFT", absent="RE-RECORD")
 r = project("drift-nostamp", at=S_FILES, stamp=None)
 expect("drift: with no stamp, stale cannot be told from custom: DRIFT, with the reason",
-       run(r, "refresh-drift.sh"), 0, "DRIFT: .github/workflows/sample-wf.yml (no stamp")
+       run(r, "refresh-drift.sh"), 0, "DRIFT: .claude/hooks/session-start.sh (no stamp")
 expect("drift: with no Phase 2 marker it says it fell back to main",
        run(r, "refresh-drift.sh"), 0, "ls-remote main -- no Phase 2 marker")
 
 # ---- item 6: the 3-way merge ----------------------------------------------------
-r = project("merge-clean", at=S_FILES, changes={".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"]})
-res = run(r, "refresh-merge.sh", ".github/workflows/qa.yml", "--write", env={"REFRESH_PIN": H})
+LADDER = ".github/scripts/ladder.js"
+r = project("merge-clean", at=S_FILES, changes={LADDER: LADDER_LOCAL})
+res = run(r, "refresh-merge.sh", LADDER, "--write", env={"REFRESH_PIN": H})
 expect("merge: a local hunk apart from the upstream one merges cleanly", res, 0, "(0 conflict(s))")
-expect("merge: the local hunks are shown on their own", res, 0, "+# top-1 (local)")
-merged = (r / ".github/workflows/qa.yml").read_text()
+expect("merge: the local hunks are shown on their own", res, 0, "+// top-1 (local)")
+merged = (r / LADDER).read_text()
 check("merge: --write keeps the local hunk AND takes the upstream one",
-      "# top-1 (local)" in merged and "# bottom-3 (upstream fix)" in merged and "<<<<<<<" not in merged,
+      "// top-1 (local)" in merged and "// bottom-3 (upstream fix)" in merged and "<<<<<<<" not in merged,
       f"merged file:\n{merged}")
 r = project("merge-conflict", at=S_FILES,
-            changes={".github/workflows/qa.yml": QA_S.replace("# bottom-3\n", "# bottom-3 (local)\n")})
-res = run(r, "refresh-merge.sh", ".github/workflows/qa.yml", "--write", env={"REFRESH_PIN": H})
+            changes={LADDER: LADDER_S.replace("// bottom-3\n", "// bottom-3 (local)\n")})
+res = run(r, "refresh-merge.sh", LADDER, "--write", env={"REFRESH_PIN": H})
 expect("merge: an overlapping hunk is a conflict, and --write refuses it", res, 1, "NOT WRITTEN")
 check("merge: a refused --write leaves the file untouched",
-      "<<<<<<<" not in (r / ".github/workflows/qa.yml").read_text(), "conflict markers were written")
-r = project("merge-write-fails", at=S_FILES, changes={".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"]})
-before = (r / ".github/workflows/qa.yml").read_text()
-res = run(r, "refresh-merge.sh", ".github/workflows/qa.yml", "--write", env={"REFRESH_PIN": H, **failing("mv")})
+      "<<<<<<<" not in (r / LADDER).read_text(), "conflict markers were written")
+r = project("merge-write-fails", at=S_FILES, changes={LADDER: LADDER_LOCAL})
+before = (r / LADDER).read_text()
+res = run(r, "refresh-merge.sh", LADDER, "--write", env={"REFRESH_PIN": H, **failing("mv")})
 expect("merge: a write that fails is exit 2 and NOT WRITTEN (Codex, #449)", res, 2, "NOT WRITTEN")
 check("merge: a write that fails never also claims WRITTEN",
       not any(line.startswith("WRITTEN:") for line in res[1].splitlines()), res[1])
 check("merge: a failed write leaves the file as it was, and no temporary file",
-      (r / ".github/workflows/qa.yml").read_text() == before
-      and not list((r / ".github/workflows").glob(".refresh-merge.*")),
-      f"files: {sorted(p.name for p in (r / '.github/workflows').iterdir())}")
+      (r / LADDER).read_text() == before
+      and not list((r / ".github/scripts").glob(".refresh-merge.*")),
+      f"files: {sorted(p.name for p in (r / '.github/scripts').iterdir())}")
+# A workflow is never merged with a template (Phase E of #460 step 4): a caller's
+# template would overwrite the project's inputs, and an OWN workflow is the
+# project's to keep.
+r = project("merge-workflow", at=S_FILES, changes={".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"]})
+before = (r / ".github/workflows/qa.yml").read_text()
+expect("merge: a workflow is CANNOT MERGE, and left as it is (Phase E)",
+       run(r, "refresh-merge.sh", ".github/workflows/qa.yml", "--write", env={"REFRESH_PIN": H}), 2,
+       "CANNOT MERGE: .github/workflows/qa.yml is not an installed copy of an upstream template")
+check("merge: ...the workflow is untouched",
+      (r / ".github/workflows/qa.yml").read_text() == before, (r / ".github/workflows/qa.yml").read_text())
 
 # A kit at the project root (UI_TESTS_DIR folds to `.`, e.g. `x/..`): its files
 # map through refresh_kit_rel, and only names templates/ui-tests ships are the
@@ -1030,14 +1007,14 @@ check("merge: a failed write leaves the file as it was, and no temporary file",
 r = project("merge-rootkit", at=S_FILES, changes={
     ".github/workflows/sample-wf.yml": "name: Sample WF\nenv:\n  UI_TESTS_DIR: x/..\n",
     "playwright.config.js": "// config\n// local\n",
-    ".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"],
+    LADDER: LADDER_LOCAL,
 })
 expect("merge: a file of a kit at the project root merges against templates/ui-tests",
        run(r, "refresh-merge.sh", "./playwright.config.js", env={"REFRESH_PIN": H}), 0,
        "LOCAL HUNKS (templates/ui-tests/playwright.config.js at the stamp")
-expect("merge: ...and a workflow beside a root kit still merges against its own template",
-       run(r, "refresh-merge.sh", ".github/workflows/qa.yml", env={"REFRESH_PIN": H}), 0,
-       "LOCAL HUNKS (templates/workflows/qa.yml at the stamp")
+expect("merge: ...and a script beside a root kit still merges against its own template",
+       run(r, "refresh-merge.sh", LADDER, env={"REFRESH_PIN": H}), 0,
+       "LOCAL HUNKS (templates/scripts/ladder.js at the stamp")
 ROOT_KIT = {rel[len("templates/ui-tests/"):]: text for rel, text in H_FILES.items()
             if rel.startswith("templates/ui-tests/") and not rel.endswith("package-lock.json")}
 r = project("stamp-rootkit", changes={
@@ -1053,23 +1030,6 @@ expect("stamp: a kit at the project root is checked at its root paths, never as 
        res, 1, "UNAPPLIED: playwright.config.js differs from templates/ui-tests/playwright.config.js",
        absent="./playwright")
 
-# ---- item 8: the caller set is computed --------------------------------------------
-r = project("callers", changes={".github/actions/ui-suite/action.yml": None,
-                                ".github/actions/ui-suite/validate-report-path.py": None,
-                                ".github/workflows/mine.yml": "name: Mine\n"})
-res = run(r, "refresh-callers.sh", "templates/workflows/cron-notify.yml", env={"REFRESH_PIN": H})
-want = "\n".join(sorted([
-    "templates/workflows/qa.yml", "templates/workflows/sample-wf.yml",
-    "templates/workflows/cron-notify.yml", "templates/actions/ui-suite/action.yml",
-    *[f"directives/{d}.md" for d in ("global", "git", "design", "test", "data")]]))
-rc, out = res
-stdout_lines = "\n".join(ln for ln in out.splitlines() if not ln.startswith("refresh-callers:"))
-check("callers: installed callers, the composite they reach upstream, the directives and the named new caller",
-      rc == 0 and stdout_lines == want, f"exit {rc}; got:\n{out}\nwant:\n{want}")
-expect("callers: a caller upstream does not ship is refused, not skipped",
-       run(r, "refresh-callers.sh", "templates/workflows/nope.yml", env={"REFRESH_PIN": H}),
-       2, "templates/workflows/nope.yml is not shipped")
-
 # ---- item 8: the kit-defects checks are extracted and run ----------------------------
 r = project("kd")
 res = run(r, "kit-defects.sh")
@@ -1083,132 +1043,6 @@ expect("kit-defects: the fixed copy reads CLEAR",
 r = project("kd-none", changes={p: None for p in installed(H_FILES) if "/ui-tests/" in p})
 expect("kit-defects: no kit is said, not silent",
        run(r, "kit-defects.sh"), 0, "OK: no UI-test kit")
-
-# ---- new repository variables and secrets: an OWNER PRE-MERGE item -------------
-# Each project stands as it was when the stamp was written (S's files,
-# committed with the stamp), and the refresh's installs land UNCOMMITTED on
-# top, as they do in Phase 3. The baseline is the project's own files at the
-# stamp commit, never the upstream templates (Codex, #450).
-LIVE = INSTALLED_WORKFLOWS + ("qa-live.yml",)
-
-
-def refresh_installs(root, workflows):
-    for path, (text, _) in installed(H_FILES, workflows=workflows).items():
-        if path.startswith(".github/workflows/"):
-            (root / path).write_text(text)
-
-
-r = project("vars-new", at=S_FILES, workflows=LIVE)
-run(r, "refresh-delta.sh")
-refresh_installs(r, LIVE)
-res = run(r, "refresh-vars.sh")
-expect("vars: a release that adds a vars.APP_URL read names the variable and the file",
-       res, 0, "OWNER PRE-MERGE: set repository variable APP_URL — newly read by templates/workflows/qa-live.yml")
-expect("vars: a new secrets read is named the same way (the bracket form too)",
-       res, 0, "OWNER PRE-MERGE: set repository secret NEW_SECRET — newly read by templates/workflows/qa-live.yml")
-expect("vars: a read the project already ran with is not flagged",
-       res, 0, "OWNER PRE-MERGE", absent="TEST_AUTH_CREDENTIAL")
-expect("vars: GITHUB_TOKEN is never flagged", res, 0, "OWNER PRE-MERGE", absent="GITHUB_TOKEN")
-expect("vars: a read after a # inside a quoted string is still a read (Codex, #450)",
-       res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED")
-expect("vars: a #-led line of a block scalar is still a read (Codex, #450)",
-       res, 0, "OWNER PRE-MERGE: set repository secret BLOCK_HASH")
-expect("vars: a name in plain text (no ${{ }}, no if:) is not a read",
-       res, 0, "OWNER PRE-MERGE", absent="COMMENTED_ONLY")
-expect("vars: a bare if: expression is a read", res, 0, "OWNER PRE-MERGE: set repository variable GATE")
-expect("vars: a folded `if: >` block is read whole (Codex, #450)",
-       res, 0, "OWNER PRE-MERGE: set repository variable DEPLOY_ENABLED")
-expect("vars: a commented-out read (cron-notify's optional DB lines) is no read, even first time (Codex, #450)",
-       res, 0, "OWNER PRE-MERGE", absent="OPTIONAL_DB")
-expect("vars: a ${{ }} folded over two lines is followed to its }} (Codex, #450)",
-       res, 0, "OWNER PRE-MERGE: set repository variable FOLDED_FLAG")
-expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 7 new", absent="OK: no new")
-
-r = project("vars-custom-dropped", at=S_FILES, workflows=LIVE,
-            changes={".github/workflows/qa-live.yml": LIVE_S.replace(
-                "          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}\n", "")})
-run(r, "refresh-delta.sh")
-refresh_installs(r, LIVE)
-expect("vars: a read the project's CUSTOM copy had dropped is listed when the template brings it (Codex, #450)",
-       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository secret TEST_AUTH_CREDENTIAL")
-
-r = project("vars-comment-goes-live", at=S_FILES, workflows=LIVE,
-            changes={".github/workflows/qa-live.yml": LIVE_S + "          # future: use ${{ vars.APP_URL }}\n"})
-run(r, "refresh-delta.sh")
-refresh_installs(r, LIVE)
-expect("vars: a name the project only MENTIONED in a comment is listed when the template makes it live (Codex, #450)",
-       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
-
-r = project("vars-trailing-comment", at=S_FILES, workflows=LIVE,
-            changes={".github/workflows/qa-live.yml": LIVE_S.replace("name: QA Live", "name: QA Live # future: ${{ vars.APP_URL }}")})
-run(r, "refresh-delta.sh")
-refresh_installs(r, LIVE)
-expect("vars: a read only in a trailing comment of the project's file is no baseline read (Codex, #450)",
-       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
-
-r = project("vars-inert-text", at=S_FILES, workflows=LIVE,
-            changes={".github/workflows/qa-live.yml": LIVE_S.replace("name: QA Live", "name: QA Live (vars.APP_URL later)")
-                     + "      - run: echo 'configure vars.APP_URL later'\n"})
-run(r, "refresh-delta.sh")
-refresh_installs(r, LIVE)
-expect("vars: inert text naming a variable is no baseline read: the live one is listed (Codex, #450)",
-       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
-
-# The baseline is the commit that WROTE the stamp, not the last one touching
-# the sync file: a refresh_kept re-record after a local edit that added a read
-# must not make that read count as run with at the stamp (claude.prop pilot,
-# 2026-10-15). Here commit 2 takes qa-live.yml to the head's (APP_URL) and
-# commit 3 only re-records; the read is still new against the stamp's files.
-r = project("vars-rerecord", at=S_FILES, workflows=LIVE)
-stamp_commit = git(r, "rev-parse", "HEAD")
-refresh_installs(r, LIVE)
-git(r, "commit", "-qam", "local edit: qa-live reads APP_URL")
-set_kept(r, ".github/scripts/check-contrast.js", {"blob": "0" * 40, "local": "0" * 40, "reason": "re-recorded"})
-git(r, "commit", "-qam", "re-record refresh_kept")
-run(r, "refresh-delta.sh")
-res = run(r, "refresh-vars.sh")
-expect("vars: the baseline is the commit that wrote the stamp, not a later re-record (claude.prop pilot, 2026-10-15)",
-       res, 0, f"baseline: project commit {stamp_commit}")
-expect("vars: ...so a read added after the stamp is still listed",
-       res, 0, "OWNER PRE-MERGE: set repository variable APP_URL")
-
-r = project("vars-installed-now", at=S_FILES)
-run(r, "refresh-delta.sh")
-refresh_installs(r, LIVE)
-res = run(r, "refresh-vars.sh")
-expect("vars: a template installed by THIS refresh lists even its stamp-era reads (Codex, #450)",
-       res, 0, "OWNER PRE-MERGE: set repository secret TEST_AUTH_CREDENTIAL — newly read by templates/workflows/qa-live.yml")
-expect("vars: …and its new ones", res, 0, "OWNER PRE-MERGE: set repository variable APP_URL")
-
-r = project("vars-newly-installed", at=S_FILES, workflows=LIVE)
-run(r, "refresh-delta.sh")
-refresh_installs(r, LIVE + ("new.yml",))
-expect("vars: a template absent at the stamp counts its reads as new",
-       run(r, "refresh-vars.sh"), 0,
-       "OWNER PRE-MERGE: set repository variable FROM_NEW — newly read by templates/workflows/new.yml")
-
-r = project("vars-none")
-run(r, "refresh-delta.sh")
-expect("vars: a template the project does not install is not read: the OK line, never silence",
-       run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="APP_URL")
-r = project("vars-current", workflows=LIVE, stamp=H)
-run(r, "refresh-delta.sh")
-res = run(r, "refresh-vars.sh")
-# The fixture's read after a quoted `#` and its `${{` folded over two lines are
-# the documented cost of a baseline kept an under-count (it drops a mid-line
-# `#` onward and follows no open span): both are listed again even unchanged.
-# No shipped template has either shape (checked when this was written).
-expect("vars: an unchanged file lists only the two documented-cost reads",
-       res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED", absent="APP_URL")
-expect("vars: …the folded one", res, 0, "OWNER PRE-MERGE: set repository variable FOLDED_FLAG")
-expect("vars: …and nothing else", res, 0, "SUMMARY: 2 new")
-r = project("vars-current-plain", stamp=H)
-run(r, "refresh-delta.sh")
-expect("vars: reads all present at the stamp print the explicit OK line",
-       run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="OWNER PRE-MERGE")
-run(r, "refresh-stamp.sh")
-expect("vars: after the stamp consumed Phase 2's marker it refuses, never a false OK",
-       run(r, "refresh-vars.sh"), 2, "no Phase 2 marker", absent="OK: no new")
 
 # ---- the house style (#470) --------------------------------------------------
 # A project MARKED as on the house style (.claude/directive-sync.json ->
@@ -1390,30 +1224,50 @@ for name, ref, needle in (
     expect(f"callers drift: PIN line for a caller on {ref if ref[:1] == 'v' else 'an older SHA'}",
            run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, needle)
 
-r = project("callers-set", changes=ON_CALLERS)
-rc, out = run(r, "refresh-callers.sh", env={"REFRESH_PIN": H})
-got = "\n".join(ln for ln in out.splitlines() if not ln.startswith("refresh-callers:"))
-want = "\n".join(sorted(["templates/workflows/sample-wf.yml",
-                         *[f"directives/{d}.md" for d in ("global", "git", "design", "test", "data")]]))
-check("callers set: a caller and the composite only its template reaches are left out",
-      rc == 0 and got == want, f"exit {rc}; got:\n{out}\nwant:\n{want}")
-check("callers set: the caller left out is named on stderr",
-      "refresh-callers: .github/workflows/qa.yml calls shared-qa.yml@" in out, out)
-
 r = project("callers-stamp", changes=ON_CALLERS)
 run(r, "refresh-delta.sh")
-rc, out = res = run(r, "refresh-stamp.sh")
-expect("callers stamp: each caller is said once", res, 1,
-       "caller: .github/workflows/qa.yml calls shared-qa.yml@")
-check("callers stamp: the deleted composite and check-ui-viewports.js are never required",
-      "check-ui-viewports.js" not in out and "UNAPPLIED: .github/actions/" not in out, out)
-m = re.search(r"UNAPPLIED: \.github/workflows/qa\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
-check("callers stamp: the caller is compared when the delta lists its template", bool(m), out)
-if m:
-    set_kept(r, ".github/workflows/qa.yml",
-             {"blob": m.group(1), "local": m.group(2), "reason": "pilot of #460 step 4"})
-    expect("callers stamp: with the caller recorded in refresh_kept, the stamp goes through",
-           run(r, "refresh-stamp.sh"), 0, f"stamped: {H}", absent="check-ui-viewports")
+expect("callers stamp: a caller is never compared, so it stamps with no refresh_kept record (Phase E)",
+       run(r, "refresh-stamp.sh"), 0, f"stamped: {H}", absent=".github/workflows/qa.yml")
+expect("callers stamp: ...and the deleted composite and check-ui-viewports.js are never required",
+       run(r, "refresh-stamp.sh"), 1, "was NOT classified", absent="check-ui-viewports.js")
+
+# What a refresh still requires (Phase E): the scripts a directive names. One
+# the project deleted is absent but required; a copy no directive names is a
+# SHARED-COPY, and its line says whether anything here still names it.
+r = project("named-absent", changes={".github/scripts/ladder.js": None})
+run(r, "refresh-delta.sh")
+expect("stamp: a script a directive names, deleted here, is absent but required (Phase E)",
+       run(r, "refresh-stamp.sh"), 1,
+       "UNAPPLIED: .github/scripts/ladder.js is absent but required -- an installed kit ships it, or a directive names it")
+r = project("callers-shared", scripts=INSTALLED_SCRIPTS + ("notify-email.js",), changes={
+    **ON_CALLERS,
+    ".github/workflows/qa.yml": CALLER_QA.replace("check-contrast.js", "check-ui-viewports.js"),
+    ".github/scripts/check-ui-viewports.js": S_FILES["templates/scripts/check-ui-viewports.js"]})
+res = run(r, "refresh-drift.sh", env={"REFRESH_PIN": H})
+expect("callers drift: a shared copy the project's own job still runs is named with it, to keep",
+       res, 0, "SHARED-COPY: .github/scripts/check-ui-viewports.js — no directive names it, and the shared workflows read "
+       "templates/scripts/check-ui-viewports.js from claude.directives at the called commit; not compared. "
+       "Still named by: .github/workflows/qa.yml -- keep it while they do")
+expect("callers drift: a shared copy nothing here names is to delete in the refresh's PR",
+       res, 0, "SHARED-COPY: .github/scripts/notify-email.js — no directive names it")
+check("callers drift: ...whose line says delete",
+      "notify-email.js from claude.directives at the called commit; not compared. Nothing here names it: delete it in this refresh's PR" in res[1],
+      res[1])
+expect("callers drift: a project on callers with the composite deleted has no composite line",
+       res, 0, "SUMMARY:", absent=".github/actions/")
+# The composite still installed, which nothing names now: both it and the
+# script only it ran are to delete -- the composite's own use does not count,
+# since it goes in the same PR.
+r = project("callers-shared-composite", changes={**ON_CALLERS,
+    ".github/actions/ui-suite/action.yml": ACTION,
+    ".github/scripts/check-ui-viewports.js": S_FILES["templates/scripts/check-ui-viewports.js"]})
+res = run(r, "refresh-drift.sh", env={"REFRESH_PIN": H})
+expect("callers drift: a composite copy nothing names is to delete",
+       res, 0, "SHARED-COPY: .github/actions/ui-suite/ — the shared workflows read templates/actions/ui-suite from "
+       "claude.directives at the called commit; not compared. Nothing here names it")
+check("callers drift: ...and a script copy only that composite ran is to delete with it",
+      "check-ui-viewports.js from claude.directives at the called commit; not compared. Nothing here names it" in res[1],
+      res[1])
 
 r = project("callers-kit", changes={**ON_CALLERS,
                                     ".github/workflows/qa.yml": CALLER_QA.replace(".github/scripts/ui-tests", "e2e"),
@@ -1421,31 +1275,6 @@ r = project("callers-kit", changes={**ON_CALLERS,
 rc, out = run(r, "kit-dirs.sh")
 check("kit-dirs: a caller's tests-dir names its kit; a full copy's expression is not a path",
       rc == 0 and out.strip() == "e2e", f"exit {rc}; got: {out!r}")
-
-# The claude.prop refresh of 2026-10-26: qa-live.yml a caller since the
-# stamp. Its template's reads (APP_URL and the rest) are no new reads, and the
-# delta listing that template is no "absent here".
-CALLER_LIVE = f"""name: QA Live
-on: [workflow_run]
-jobs:
-  live:
-    uses: akyachtsman/claude.directives/.github/workflows/shared-qa-live.yml@{H}
-"""
-r = project("callers-vars", at=S_FILES, workflows=LIVE,
-            changes={".github/workflows/qa-live.yml": CALLER_LIVE})
-run(r, "refresh-delta.sh")
-res = run(r, "refresh-vars.sh")
-expect("callers vars: a caller is named, not compared with its template",
-       res, 0, f"caller: .github/workflows/qa-live.yml calls shared-qa-live.yml@{H} -- not compared",
-       absent="OWNER PRE-MERGE")
-expect("callers vars: ...so its template's reads print the OK line",
-       res, 0, "OK: no new repository variables or secrets read (3 installed template(s)")
-rc, out = run(r, "refresh-callers.sh")
-check("callers set: a delta template whose workflow is a caller gets no 'absent here' hint",
-      rc == 0 and "templates/workflows/qa-live.yml, absent here" not in out
-      and "refresh-callers: .github/workflows/qa-live.yml calls shared-qa-live.yml@" in out, f"exit {rc}; got:\n{out}")
-check("callers set: ...while a delta template with no workflow here still gets it",
-      "the delta lists templates/workflows/new.yml, absent here" in out, out)
 
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(CASES.finish(f"{CASES.passed} refresh-script behaviours hold against a fixture upstream."))

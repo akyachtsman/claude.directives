@@ -115,6 +115,21 @@ never move, and the next release still counts up from the highest one.
   names; a task that needs other names keeps the full copy for now.
 - `shared-pages-deploy.yml` fetches nothing from this repo: it runs no shared
   script.
+- **A gated admin project (apfp.claude, 2026-10-26).** apfp.claude's config
+  collects an `admin` project only when `ADMIN_SUITE` is `1`, signed in with a
+  second, live `TEST_ADMIN_CREDENTIAL` that only its post-merge live run may
+  see. `shared-qa-live.yml` takes `admin-suite: true` and that secret by name,
+  and hands both to the ui-suite composite (its `test-admin-credential` and
+  `admin-suite` inputs, exported on the same four steps as the other auth
+  values) only on a `workflow_run`: a dispatch can run any branch's code, so it
+  gets neither. The PR workflows never take them.
+- **A deny entry outside a narrower `site-dir`.** A project that publishes one
+  directory (apfp.claude's `app/`) still lists `CLAUDE.md` and its other
+  internal paths in `.github/pages-deny.txt`, so the deploy proves they serve
+  404. Such an entry exists in the repository but outside `site-dir`, so the
+  filter reports it as a notice ("not published; probed") instead of the
+  "matches nothing" warning, which stays for an entry inside `site-dir` or
+  nowhere at all. The template has the same rule.
 
 ## What a project keeps (claude.prop pilot, 2026-10-25)
 

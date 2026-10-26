@@ -53,6 +53,10 @@ on:
         description: The suite job's bound. 120 is the fleet floor for a ui-suite caller; raise it, never lower it.
         type: number
         default: 120
+      admin-suite:
+        description: true runs the project's gated admin project (apfp.claude D27) on a deploy-triggered run, exporting ADMIN_SUITE=1 and TEST_ADMIN_CREDENTIAL to the suite. A manual dispatch never gets either, since it can run any branch's code.
+        type: boolean
+        default: false
     secrets:
       DIRECTIVES_READ_TOKEN:
         description: Needed only if claude.directives turns private, where the run's own token cannot read it. A read-only token for that one repo; unset, the shared files are fetched with the run's own token.
@@ -60,6 +64,9 @@ on:
       TEST_AUTH_CREDENTIAL:
         required: false
       TEST_AUTH_EMAIL:
+        required: false
+      TEST_ADMIN_CREDENTIAL:
+        description: The admin project's login. Read only when admin-suite is true and the run is a workflow_run on the default branch.
         required: false
 
 # Least privilege: read the repo and run tests against the live URL.
@@ -207,3 +214,9 @@ jobs:
           test-auth-success-selector: ${{ vars.TEST_AUTH_SUCCESS_SELECTOR }}
           artifact-name: playwright-results-live
           app-pages: ${{ vars.APP_PAGES }}
+          # The admin login reaches the suite only on a deploy-triggered run,
+          # which this job already limits to the default branch: a dispatch can
+          # name any branch, so its code is not trusted with it. Without the
+          # flag, a config that gates on ADMIN_SUITE leaves the project out.
+          test-admin-credential: ${{ github.event_name == 'workflow_run' && inputs.admin-suite && secrets.TEST_ADMIN_CREDENTIAL || '' }}
+          admin-suite: ${{ github.event_name == 'workflow_run' && inputs.admin-suite && '1' || '0' }}

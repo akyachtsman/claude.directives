@@ -243,6 +243,14 @@ inputs:
     description: 'TEST_AUTH_SUCCESS_SELECTOR (directives#379): a selector only the signed-in view shows; S2 asserts it is visible after submitting the credential. Empty keeps reading the gate clearing as success. Not a secret — pass it from a repo VARIABLE, never a secret: a masked selector in a failure message is unreadable'
     required: false
     default: ''
+  test-admin-credential:
+    description: 'TEST_ADMIN_CREDENTIAL: a second, higher-privilege login for a gated admin project (apfp.claude D27), exported to the same four steps as test-auth-credential. Pass it only from a run whose code is trusted (a post-merge live run, never a pull request): the suite running here can read it. Empty for every other project'
+    required: false
+    default: ''
+  admin-suite:
+    description: "ADMIN_SUITE: '1' tells a config that gates an admin project on it to collect that project. Empty or '0' leaves it out. Exported to the same four steps"
+    required: false
+    default: ''
   artifact-name:
     description: 'Name for the uploaded results artifact'
     required: true
@@ -523,6 +531,8 @@ runs:
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
+        TEST_ADMIN_CREDENTIAL: ${{ inputs.test-admin-credential }}
+        ADMIN_SUITE: ${{ inputs.admin-suite }}
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
         PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
       # `--` ENDS OPTION PARSING. A report-path beginning with `-` is a valid
@@ -562,6 +572,8 @@ runs:
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
+        TEST_ADMIN_CREDENTIAL: ${{ inputs.test-admin-credential }}
+        ADMIN_SUITE: ${{ inputs.admin-suite }}
         # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
         # Keep exact env parity across the sequence by hand, and that rule is
         # not bureaucratic: two of these steps IMPORT the
@@ -594,6 +606,8 @@ runs:
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
+        TEST_ADMIN_CREDENTIAL: ${{ inputs.test-admin-credential }}
+        ADMIN_SUITE: ${{ inputs.admin-suite }}
         # REPORT_PATH: see its comment on "Check three viewport classes are declared".
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
         # NEUTRALISE PLAYWRIGHT'S OWN REDIRECT. `PLAYWRIGHT_JSON_OUTPUT_FILE`
@@ -667,6 +681,8 @@ runs:
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
+        TEST_ADMIN_CREDENTIAL: ${{ inputs.test-admin-credential }}
+        ADMIN_SUITE: ${{ inputs.admin-suite }}
         # REPORT_PATH: see its comment on "Check three viewport classes are declared".
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
         # Same value on every step of the sequence, kept identical by hand: two

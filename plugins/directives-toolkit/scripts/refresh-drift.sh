@@ -17,7 +17,8 @@
 # workflow templates are retired, and templates/workflows/* are callers).
 #   - Compared: the SessionStart hook; every installed .github/scripts/<name>
 #     that a directive at the pin names (derive-scripts.sh over directives/*.md:
-#     test.md names browser-ladder.js and the package.json beside it), since
+#     test.md names browser-ladder.js and the package.json beside it, design.md
+#     check-contrast.js), since
 #     those are the only scripts a refresh installs; and, on a project marked
 #     as on the house style (refresh-lib.sh -> refresh_house_style, #470),
 #     styles/components.css and styles/components.js, with styles/tokens.css

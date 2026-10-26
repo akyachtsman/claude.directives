@@ -104,7 +104,8 @@ Execute in order:
    **Scripts a directive names by path — DERIVE the set, never hand-list it**
    (a hand list falls behind: #321, #353, #355). The callers name no script, so
    the five `directives/*.md` from step 1 are the callers here: `test.md` names
-   `browser-ladder.js` and `.github/scripts/package.json` beside it for local runs. Fetch them
+   `browser-ladder.js` and `.github/scripts/package.json` beside it for local runs,
+   and `design.md` names `check-contrast.js` for `/design-intake`'s. Fetch them
    at step 1's SHA, never a moving `main`. Run this block; it is the same
    derivation `/refresh-repo` runs, and the plugin file it calls is resolved when
    this command loads, so run it from here rather than from that command's text:
@@ -128,8 +129,9 @@ Execute in order:
    `.github/scripts/<f>` from `claude.directives/templates/scripts/<f>`. A failed
    fetch stops the bootstrap; never ship a directive naming a file it did not
    deliver. Install no composite under `.github/actions/` and no other script:
-   the shared workflows read `secret-scan`, `ui-suite`, `check-contrast.js` and
-   `check-ui-viewports.js` from `claude.directives` at the called commit.
+   the shared workflows read `secret-scan`, `ui-suite` and `check-ui-viewports.js`
+   from `claude.directives` at the called commit, and run their own
+   `check-contrast.js` unless the `qa` caller's `contrast-script` names the project's.
    `check-contrast.js`, the WCAG guardrail the `qa` caller runs against the design
    tokens, reads `styles/tokens.css` or `css/tokens.css` by default — elsewhere,
    pass `--tokens <file>` in the caller's `contrast-args` input (repeat it per theme

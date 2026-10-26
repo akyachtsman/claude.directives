@@ -178,7 +178,8 @@ delete each, with its step in `qa.yml` if one remains.
 
 **Which files.** Compared: the `SessionStart` hook, and every installed
 `.github/scripts/<name>` that a directive at the pinned head names (today
-`test.md` names `browser-ladder.js` and the `package.json` beside it), because
+`test.md` names `browser-ladder.js` and the `package.json` beside it, `design.md`
+`check-contrast.js`), because
 those are the only scripts a refresh installs; the set is derived, by the same
 `derive-scripts.sh` *Deriving the referenced-script set* runs, never listed.
 Named but not compared: every workflow (`CALLER`, `OWN` or `NO-TEMPLATE`) and
@@ -393,7 +394,8 @@ skipping it ships a broken reference.
 - the `claude-hooks` row, whose whole purpose is first installation and whose
   absence breaks the settings row that references it;
 - the **directive-referenced** entries of the `templates/scripts/*` row
-  (`browser-ladder.js` and its `package.json`, named by `test.md`), whose
+  (`browser-ladder.js` and its `package.json`, named by `test.md`;
+  `check-contrast.js`, named by `design.md`), whose
   absence breaks the documented command. Deriving a path is not installing it:
   the derivation below and this exception must name the same set.
 - the `templates/styles/*` row on a project marked as on the house style: the

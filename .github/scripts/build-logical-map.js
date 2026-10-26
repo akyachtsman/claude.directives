@@ -414,6 +414,7 @@ const FLOW = [
   ['/new-repo', '/refresh-repo', 'det', 'derives the scripts to copy as', 'a', 'derivation `/refresh-repo` runs'],
   ['/new-repo', 'browser-ladder.js', 'cop', 'copies, as a directive names it', 'a', 'DERIVE the set'],
   ['/new-repo', 'package.json', 'cop', 'copies, as a directive names it', 'a', 'DERIVE the set'],
+  ['/new-repo', 'check-contrast.js', 'cop', 'copies, as a directive names it', 'a', 'DERIVE the set'],
   ['/new-repo', 'ui-tests/', 'cop', 'copies the kit', 'a', 'Install the Playwright kit'],
   ['cicd-setup.md', 'notify-task.js', 'add', 'adds with cron-notify.yml', 'a', '-o .github/scripts/notify-task.js'],
   ['cicd-setup.md', 'cron-notify.yml', 'add', 'adds when a scheduled task needs it', 'a', '-o .github/workflows/cron-notify.yml'],

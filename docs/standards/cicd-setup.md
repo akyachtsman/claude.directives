@@ -62,7 +62,7 @@ the shared files changed between the commit the pin names and the head.
 | Its own checks, in a sibling job of the `qa` caller that `qa` lists in `needs:` | — |
 | The Playwright kit (`.github/scripts/ui-tests/`), Step 3 | — |
 | `.github/scripts/package.json` and `browser-ladder.js`, which `test.md` names for local runs | — |
-| Its own `check-contrast.js` with added pairs, named in the caller's `contrast-script` | without it, the shipped pairs run from `claude.directives` |
+| `.github/scripts/check-contrast.js`, which `design.md` names for local runs (`/design-intake`) | CI runs the shared copy unless the caller's `contrast-script` names this one, which a project with added pairs does |
 | A scheduled task's `notify-task.js` (Step 9f) | `notify-email.js` is staged beside it at run time |
 | — | the `secret-scan` and `ui-suite` composites, `check-ui-viewports.js`, `notify-email.js`: read from `claude.directives` at the pinned commit |
 
@@ -99,8 +99,8 @@ the optional `DIRECTIVES_READ_TOKEN` secret (`TIME-SENSITIVE.md` in
 
 Copy the QA callers from `claude.directives` into the target repo's
 `.github/workflows/`: `qa.yml` and `qa-live.yml` here, `qa-response.yml` just
-below, all three standard. They need no composite or script beside them; the
-one script file every project carries is the CommonJS manifest:
+below, all three standard. They need no composite or script beside them. Beside
+the scripts a directive names (below), every project carries the CommonJS manifest:
 
 ```bash
 mkdir -p .github/workflows .github/scripts
@@ -131,10 +131,12 @@ if [ ! -f .github/scripts/package.json ]; then
 fi
 ```
 
-Then fill in each caller's inputs (Step 2). A project that adds contrast pairs of
-its own (`design.md` → *Accessibility*) copies
-`templates/scripts/check-contrast.js` to `.github/scripts/`, adds them there, and
-names that copy in the `qa` caller's `contrast-script` input.
+Then copy each script a directive names (`/new-repo` step 5 derives the set:
+today `browser-ladder.js` and `check-contrast.js`) from `templates/scripts/`, and
+fill in each caller's inputs (Step 2). A project that adds contrast pairs of its
+own (`design.md` → *Accessibility*) adds them to its
+`.github/scripts/check-contrast.js` and names that copy in the `qa` caller's
+`contrast-script` input.
 
 ⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
 Actions cache WRITE access is set by the triggering event, not the branch, and
@@ -470,7 +472,7 @@ Optional repository variables (the shared qa workflows pass them through the `ui
 - [ ] `.github/workflows/cron-notify.yml` present with `.github/scripts/notify-task.js` if the project has a scheduled task, both absent otherwise; `keepalive.yml` ABSENT (Step 9f)
 - [ ] every caller pinned `@v1`, `@vX.Y.Z` or a commit SHA, and passing its secrets by name
 - [ ] no `.github/actions/secret-scan/`, `.github/actions/ui-suite/` or `.github/scripts/check-ui-viewports.js`: the shared workflows read them from `claude.directives`, and a stale copy only misleads
-- [ ] `.github/scripts/package.json` present (Step 1); `.github/scripts/check-contrast.js` present only when the `qa` caller names it in `contrast-script`
+- [ ] `.github/scripts/package.json`, `browser-ladder.js` and `check-contrast.js` present (Step 1); the `qa` caller names `check-contrast.js` in `contrast-script` only when the project added pairs
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app has no login, or because its login ships a working credential in a visible, editable password field and the suite submits what the form holds (directives#312)

@@ -17,10 +17,13 @@ skips — so an unconfigured repo is obvious in the Actions log. Replace the bod
 of `notify-task.js` with your project's real notification.
 
 ## Files
-- `.github/workflows/cron-notify.yml`  — the scheduled job (runs `notify-task.js`)
+- `.github/workflows/cron-notify.yml`  — the scheduled job, a caller of `shared-cron-notify.yml` (runs `notify-task.js`)
 - `.github/scripts/notify-task.js`     — task entry point: config-guard + your notification logic
-- `.github/scripts/notify-email.js`    — SMTP helper, `require`d by `notify-task.js`
-- `.github/scripts/package.json`       — declares `nodemailer` (run `npm install` once to generate a lockfile)
+
+The shared workflow stages `notify-email.js` (the SMTP helper `notify-task.js`
+`require`s) and its `package.json` beside the task on each run and installs
+`nodemailer` there, so the project commits neither them nor a lockfile
+(`docs/standards/cicd-setup.md` → 9f).
 
 ## GitHub settings (Settings → Secrets and variables → Actions)
 

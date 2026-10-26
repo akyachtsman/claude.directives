@@ -184,7 +184,9 @@ those are the only scripts a refresh installs; the set is derived, by the same
 `derive-scripts.sh` *Deriving the referenced-script set* runs, never listed.
 Named but not compared: every workflow (`CALLER`, `OWN` or `NO-TEMPLATE`) and
 every copy of a shared file (`SHARED-COPY`). Silent: a script with no template
-(the project's own), `package-lock.json` (generated, never shipped), and every
+(the project's own), a script a shared workflow's input defaults to (the
+project's input to it, such as `notify-task.js`, which `shared-cron-notify.yml`
+runs from the project and never fetches), `package-lock.json` (generated, never shipped), and every
 kit file under a UI-test kit directory (`.github/scripts/ui-tests/` or wherever
 a caller's `tests-dir:` or a workflow's `UI_TESTS_DIR` points; a name
 `templates/ui-tests/` ships, so a kit AT `.github/scripts` leaves the scripts

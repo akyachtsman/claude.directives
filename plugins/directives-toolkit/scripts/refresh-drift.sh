@@ -27,7 +27,8 @@
 #     shared workflow), and every installed copy of a composite or a script
 #     that only the shared workflows use now (SHARED-COPY).
 #   - Silent: a script with no template at the pin (the project's own; a
-#     project keeps many), package-lock.json (generated, never shipped), and
+#     project keeps many), a script a shared workflow's input defaults to
+#     (the project's input to it, such as notify-task.js), package-lock.json (generated, never shipped), and
 #     the files under a UI-test kit directory -- kit-dirs.sh, the derivation
 #     refresh-stamp.sh uses, plus .github/scripts/ui-tests named outright --
 #     because kit-defects.sh and Phase 2's per-file kit diffs own the kit. A
@@ -236,6 +237,18 @@ fi
 [ "$dok" = yes ] || echo "CANNOT-VERIFY: the directives at $pin could not be read, so no script is compared this run (not DRIFT)"
 named_script() { [ "$dok" = yes ] && grep -qxF -- "$1" <<<"$named"; }
 
+# The project's own inputs to a shared workflow: a script path an input of a
+# shared-*.yml at the pin defaults to (today shared-cron-notify.yml's
+# task-script, .github/scripts/notify-task.js). The called workflow runs the
+# project's copy and fetches none, so it is project code with a starter
+# template, never a SHARED-COPY to delete, even when no tracked file names it
+# because the caller leaves the input at its default (Codex, #488).
+own_inputs=$(git -C "$up" ls-tree --name-only "$pin" -- .github/workflows/ 2>/dev/null \
+  | grep '^\.github/workflows/shared-.*\.ya\?ml$' \
+  | while IFS= read -r w; do git -C "$up" show "$pin:$w" 2>/dev/null; done \
+  | sed -n 's/^[[:space:]]*default:[[:space:]]*["'\'']\{0,1\}\(\.github\/scripts\/[^"'\'' ]*\).*/\1/p')
+own_input() { grep -qxF -- "$1" <<<"$own_inputs"; }
+
 # users_of <needle> <path to leave out>: the project's tracked files that name
 # <needle>, comma-separated, or nothing. Literal, so a path is matched as text.
 # A composite copy this run says to delete is left out too: its use of a script
@@ -328,6 +341,7 @@ for f in .github/workflows/*.yml .github/workflows/*.yaml .github/actions/*/* \
     echo "NO-TEMPLATE: $f (project-specific — skip)"
     continue
   fi
+  [ -n "$script" ] && own_input "$f" && continue   # the project's input: silent (header)
   if [ -n "$script" ] && ! named_script "$f"; then
     [ "$dok" = yes ] || continue   # the set is unknown: said once, above
     shared_line "$f" "no directive names it, and the shared workflows read $t from claude.directives at the called commit" "$(users_of "$f" "$f")"

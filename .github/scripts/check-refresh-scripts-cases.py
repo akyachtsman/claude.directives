@@ -321,6 +321,9 @@ S_FILES = {
     "templates/scripts/package.json": '{"type": "commonjs"}\n',
     "templates/scripts/notify-task.js": "require('./notify-email.js');\n",
     "templates/scripts/notify-email.js": "module.exports = {};\n",
+    # A shared workflow whose input defaults to a project script (Codex, #488).
+    ".github/workflows/shared-cron-notify.yml": ("on:\n  workflow_call:\n    inputs:\n      task-script:\n"
+                                                 "        type: string\n        default: .github/scripts/notify-task.js\n"),
     "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1')\n",
     "templates/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint')\n",
     "templates/scripts/ladder.js": LADDER_S,
@@ -1268,6 +1271,18 @@ expect("callers drift: a composite copy nothing names is to delete",
 check("callers drift: ...and a script copy only that composite ran is to delete with it",
       "check-ui-viewports.js from claude.directives at the called commit; not compared. Nothing here names it" in res[1],
       res[1])
+
+# The project's task for shared-cron-notify.yml, left at the input's default by a
+# caller with no comments, so no tracked file names it: still the project's own
+# code (the called workflow runs it, and fetches none), never a copy to delete.
+r = project("callers-own-input", scripts=INSTALLED_SCRIPTS + ("notify-task.js", "notify-email.js"), changes={
+    **ON_CALLERS,
+    ".github/workflows/cron-notify.yml": f"on:\n  schedule:\n    - cron: '0 6 * * *'\njobs:\n  notify:\n"
+                                         f"    uses: akyachtsman/claude.directives/.github/workflows/shared-cron-notify.yml@{H}\n"
+                                         "    secrets: inherit\n"})
+res = run(r, "refresh-drift.sh", env={"REFRESH_PIN": H})
+expect("callers drift: a script a shared workflow's input defaults to is the project's, never a SHARED-COPY (Codex, #488)",
+       res, 0, "SHARED-COPY: .github/scripts/notify-email.js", absent="notify-task.js")
 
 r = project("callers-kit", changes={**ON_CALLERS,
                                     ".github/workflows/qa.yml": CALLER_QA.replace(".github/scripts/ui-tests", "e2e"),

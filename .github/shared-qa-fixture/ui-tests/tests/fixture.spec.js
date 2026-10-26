@@ -14,3 +14,9 @@ test('fixture page loads without errors and fits the viewport', async ({ page })
   expect(overflow).toBeLessThanOrEqual(0);
   expect(errors).toEqual([]);
 });
+
+// Left out by the grep-invert input (`live only`). It fails if it ever runs, so
+// a self-test that lost GREP_INVERT goes red instead of passing quietly.
+test('a test the PR run leaves out (live only)', () => {
+  throw new Error('grep-invert did not reach the suite: GREP_INVERT=' + JSON.stringify(process.env.GREP_INVERT));
+});

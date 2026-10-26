@@ -92,6 +92,10 @@ on:
         description: true makes ONLY the Playwright run step advisory. A temporary opt-out for a known open UI failure; flip it back once fixed.
         type: boolean
         default: false
+      grep-invert:
+        description: Exported to the UI job as GREP_INVERT, for a project whose playwright.config.js reads it into grepInvert to leave tests out of the PR run (claude.trading's `live only`). Empty by default. The shared kit does not read it.
+        type: string
+        default: ''
       ui-timeout-minutes:
         description: The UI job's bound. 120 is the fleet floor for a ui-suite caller; raise it, never lower it.
         type: number
@@ -188,6 +192,10 @@ jobs:
     env:
       BUILD_CMD: ${{ inputs.build-cmd }}
       SITE_DIR: ${{ inputs.site-dir }}
+      # A project's own job-env setting for its suite (claude.trading pilot,
+      # 2026-10-26: S10, S11 and S14 need the live backend and run in qa-live
+      # only). Empty by default, which a config reading it treats as unset.
+      GREP_INVERT: ${{ inputs.grep-invert }}
 
     steps:
       - name: Checkout

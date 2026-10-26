@@ -473,6 +473,7 @@ jobs:
       site-dir: .github/shared-qa-fixture/site
       contrast-args: --tokens templates/styles/tokens.css
       contrast-script: templates/scripts/check-contrast.js
+      grep-invert: live only
 
   # The same guard for the callable cron workflow: a fixture task that sends
   # nothing, run the way a project's scheduled caller would run its own.

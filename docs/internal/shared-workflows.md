@@ -183,6 +183,10 @@ would, with a fixture site and suite under `.github/shared-qa-fixture/`:
   projects copy. It runs `templates/scripts/check-contrast.js` through the
   `contrast-script` input, so the self-test proves the path a project with its
   own pairs takes.
+- `grep-invert: live only` reaches the suite as `GREP_INVERT`, which the
+  fixture config turns into `grepInvert`. The spec has a second test titled
+  `(live only)` that throws if it runs, so losing the input turns the self-test
+  red (claude.trading pilot, 2026-10-26).
 
 `shared-cron-selftest` calls `shared-cron-notify.yml` with
 `.github/shared-qa-fixture/cron/notify-task.js`, a task that sends nothing:

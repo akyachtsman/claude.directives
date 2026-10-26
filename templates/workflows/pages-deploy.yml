@@ -232,9 +232,23 @@ jobs:
               # nothing either: written relative to the repository instead of
               # SITE_DIR, or naming a source (foo.md) the build renamed, it would
               # leave the real file published. Say so on the run.
+              # Except a repository path that lies OUTSIDE a SITE_DIR narrower
+              # than the repo (CLAUDE.md beside an `app/` publish root): it is
+              # not published by construction, and probing it proves the site
+              # still serves only SITE_DIR (apfp.claude pilot, 2026-10-26).
               if [ ! -e "$RUNNER_TEMP/site/$p" ]; then
-                echo "::warning::pages-deny.txt entry [$p] matches nothing in the site; paths are relative to SITE_DIR and name what is published."
-                echo "- pages-deny.txt entry \`$p\` matched nothing in the site" >> "$GITHUB_STEP_SUMMARY"
+                outside=false
+                if [ "$real" != "$ws" ] && [ -e "./$p" ]; then
+                  rp=$(realpath -e -- "./$p")
+                  case "$rp/" in "$real"/*) ;; *) outside=true ;; esac
+                fi
+                if [ "$outside" = true ]; then
+                  echo "::notice::pages-deny.txt entry [$p] lies outside SITE_DIR in the repository, so it is not published; it is probed to prove it serves 404."
+                  echo "- pages-deny.txt entry \`$p\` lies outside SITE_DIR (not published; probed)" >> "$GITHUB_STEP_SUMMARY"
+                else
+                  echo "::warning::pages-deny.txt entry [$p] matches nothing in the site; paths are relative to SITE_DIR and name what is published."
+                  echo "- pages-deny.txt entry \`$p\` matched nothing in the site" >> "$GITHUB_STEP_SUMMARY"
+                fi
               fi
               rm -rf -- "$RUNNER_TEMP/site/$p"
               denied=$((denied + 1))

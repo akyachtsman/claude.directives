@@ -623,7 +623,10 @@ function isRowList(list) {
     && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
 }
 
-// How many tests the run left with a non-skipped result, across all projects.
+// How many tests the run left with a COUNTED result, across all projects: not
+// skipped and not marked viewport-override (readReport()'s `counted`). The
+// printed lines say both conditions, because "non-skipped" alone read as 24 of
+// 236 beside Playwright's 224 passed (claude.prop, 2026-10-25).
 function executedSum(run) {
   return [...run.executed.values()].reduce((a, b) => a + b, 0);
 }
@@ -888,7 +891,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
         // LESS than the evidence, not more. Nothing scheduled entails nothing
         // executed, so the negative direction is sound where the positive is
         // not — which is the whole asymmetry this verdict is named for.
-        console.error(`  the run left ${executedSum(run)} of ${run.total} test(s) with a non-skipped result: ${ran || '(none)'}`);
+        console.error(`  the run left ${executedSum(run)} of ${run.total} test(s) counted toward a viewport class (not skipped, not marked viewport-override): ${ran || '(none)'}`);
         console.error('  This is the run\'s own report, not an inference: the widths are declared');
         console.error('  correctly and the run scheduled nothing at them. A filter, an ignore');
         console.error('  rule, a shard, a reporter, a focused test, a global setup — this gate');
@@ -935,7 +938,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       console.log('  (evidence: the run\'s own report, written by the process the config');
       console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
       console.log('   drift, not forgery. directives#349.)');
-      console.log(`  (from the run's own report: ${executedSum(run)} of ${run.total} test(s) with a non-skipped result)`);
+      console.log(`  (from the run's own report: ${executedSum(run)} of ${run.total} test(s) counted toward a viewport class; the other ${run.total - executedSum(run)} were skipped or marked viewport-override)`);
     } else {
       // THE PRE-RUN INVOCATION. Write the mapping so the post-run one joins
       // against the widths the config declared BEFORE the suite ran, rather than

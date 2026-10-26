@@ -83,15 +83,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
+        # It says what it found, in the log and the run's summary, so a green
+        # run shows the proof instead of leaving it to the missing notice
+        # (claude.prop, 2026-10-25).
         run: |
-          pub=yes
+          pub=yes why="a $GITHUB_EVENT_NAME run, not a deploy's"
           if [ "$GITHUB_EVENT_NAME" = "workflow_run" ] && [ -n "$RUN_ID" ]; then
-            pub=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
-              --jq '[.jobs[] | select(.name == "Publish" or (.name | endswith(" / Publish")))] | if length > 0 and all(.conclusion == "skipped") then "none" else "yes" end') || pub=yes
+            if found=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "Publish" or (.name | endswith(" / Publish")))] | if length == 0 then "nojob" elif all(.conclusion == "skipped") then "none" else "yes" end'); then
+              case "$found" in
+                none)  pub=none why="every Publish job in deploy run $RUN_ID was skipped" ;;
+                nojob) why="deploy run $RUN_ID has no Publish job (pages-build-deployment)" ;;
+                yes)   why="deploy run $RUN_ID published" ;;
+                *)     why="the job lookup for deploy run $RUN_ID answered '$found', so the suite runs anyway" ;;
+              esac
+            else
+              why="the job lookup for deploy run $RUN_ID failed, so the suite runs anyway"
+            fi
           fi
           if [ "$pub" = "none" ]; then
             echo "::notice::the watched deploy published nothing (no site yet), so the live suite is skipped."
           fi
+          echo "published: $pub ($why)"
+          echo "published: $pub ($why)" >> "$GITHUB_STEP_SUMMARY"
           echo "published=$pub" >> "$GITHUB_OUTPUT"
 
   ui-tests-live:

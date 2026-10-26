@@ -52,6 +52,13 @@
 #                   (refresh-lib.sh -> refresh_caller_of, #460 step 4): never
 #                   STALE, CUSTOM or DRIFT, and never merged or overwritten from
 #                   the template. Keep it; the refresh_kept note is CUSTOM's.
+#     PIN: <path>   follows each CALLER line: the commit its ref names (a SHA,
+#                   or a tag such as v1, resolved now), and whether the shared
+#                   workflow, templates/actions/ or templates/scripts/ changed
+#                   from there to the pinned head. Unchanged is "functionally
+#                   current"; changed names the paths a re-pin would take (the
+#                   owner's call). Not a count of commits: the fetches are
+#                   shallow (claude.prop refresh, 2026-10-25).
 #   NO-TEMPLATE / CANNOT-VERIFY / RETIRED, as before.
 #   TOKENS: / MISSING: the house style's two files on a marked project (#470);
 #   HOUSE-STYLE: one line on an unmarked one, which compares nothing there.
@@ -120,6 +127,40 @@ house=no
 refresh_house_style && house=yes
 house_cmp=
 [ "$house" = yes ] && house_cmp="styles/components.css styles/components.js"
+
+# pin_note <caller> <shared-<name>.yml@<ref>>: the PIN line. What a caller
+# runs is the shared workflow plus the composites and scripts it fetches at the
+# called commit, so all three are compared, by tree id, at both commits.
+pin_note() {
+  local wf=${2%%@*} ref=${2#*@} sha changed= p
+  case "$ref" in
+    *[!0-9a-f]*) sha= ;;
+    *) [ "${#ref}" -eq 40 ] && sha=$ref ;;
+  esac
+  if [ -z "$sha" ]; then
+    # A peeled annotated tag (`^{}`) wins over the tag object.
+    sha=$(git ls-remote "$REFRESH_SRC" "refs/tags/$ref" "refs/tags/$ref^{}" "refs/heads/$ref" 2>/dev/null \
+      | awk '$2 ~ /\^\{\}$/ { peeled = $1 } NR == 1 { first = $1 } END { print (peeled != "" ? peeled : first) }') || sha=
+  fi
+  if [ -z "$sha" ] || { ! git -C "$up" cat-file -e "$sha^{commit}" 2>/dev/null \
+       && ! git -C "$up" fetch -q --depth=1 "$REFRESH_SRC" "$sha" 2>/dev/null; }; then
+    echo "PIN: $1 calls $ref, which could not be resolved or fetched -- not compared with the head"
+    return
+  fi
+  if [ "$sha" = "$pin" ]; then
+    echo "PIN: $1 calls $ref, which is the pinned head"
+    return
+  fi
+  for p in ".github/workflows/$wf" templates/actions templates/scripts; do
+    [ "$(git -C "$up" rev-parse -q --verify "$sha:$p" 2>/dev/null)" = "$(git -C "$up" rev-parse -q --verify "$pin:$p" 2>/dev/null)" ] \
+      || changed="$changed${changed:+, }$p"
+  done
+  if [ -z "$changed" ]; then
+    echo "PIN: $1 calls $ref (${sha:0:12}); $wf, templates/actions and templates/scripts are unchanged from there to the head ${pin:0:12} -- functionally current"
+  else
+    echo "PIN: $1 calls $ref (${sha:0:12}); changed from there to the head ${pin:0:12}: $changed -- a re-pin would take them (the owner's call)"
+  fi
+}
 
 # kept_note <path> <template>: the note a refresh_kept record earns this
 # path, or nothing when none is bound to the template's blob at the pin.
@@ -218,6 +259,7 @@ for f in .github/workflows/*.yml .github/actions/*/* \
   # template at all: a 3-way merge would pull the full copy back over it.
   if called=$(refresh_caller_of "$f"); then
     echo "CALLER: $f$(kept_note "$f" "$t") — calls $called; keep it, never merge or overwrite it from $t (#460 step 4; record it in refresh_kept)"
+    pin_note "$f" "$called"
     callers=$((callers + 1))
     continue
   fi

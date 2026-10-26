@@ -80,14 +80,16 @@ No directive, other command, hand-off or agent starts one on its own.
   a message for the owner to relay) tells the owner to send `cmd <name>` in
   that session or thread, and puts that step outside any block meant for
   pasting, because a pasted line does not count.
-- **An installed copy older than this rule** (the command is missing from the
-  session's skills, or its file still says "Typed only"): on the owner's own
-  ask, read the current command file from `main` and follow it:
-  `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/plugins/directives-toolkit/commands/refresh-repo.md`,
-  or `kickoff.md` in the same directory. Read `${CLAUDE_PLUGIN_ROOT}` in it as the installed plugin's
-  directory (`~/.claude/plugins/marketplaces/claude-directives/plugins/directives-toolkit`).
-  If a script it names is missing there, stop and tell the owner to start a new
-  thread, which loads the current toolkit.
+- **An installed copy older than the current toolkit** (the command is missing
+  from the session's skills, its file still says "Typed only", or a script it
+  names is missing): on the owner's own ask, run the current command from ONE
+  revision, so the command file and the scripts it runs match. Clone this repo
+  into a scratch directory, then read the command file and `${CLAUDE_PLUGIN_ROOT}`
+  from that clone's `plugins/directives-toolkit` (claude.prop refresh, 2026-10-25):
+  `git clone --depth=1 https://github.com/akyachtsman/claude.directives "$SCRATCH/claude.directives"`.
+  The command is `commands/refresh-repo.md` or `commands/kickoff.md` there. If
+  the clone fails, stop and tell the owner to start a new thread, which loads
+  the current toolkit.
 
 Why it changed: until 2026-10-25 these commands set `disable-model-invocation:
 true`, so only a typed slash command could start them and a plain-text "Run

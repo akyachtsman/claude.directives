@@ -51,7 +51,9 @@ carries the missing function's error. The claude.prop refresh (2026-10-26)
 added two: refresh-vars.sh names a caller instead of comparing its template,
 and refresh-callers.sh gives a caller's template no "absent here" hint.
 MEASURED against the scripts at 137ed12: REFRESH_VARS_BIN -> both callers-vars
-cases; REFRESH_CALLERS_BIN -> the no-hint case only.
+cases; REFRESH_CALLERS_BIN -> the no-hint case only. The same refresh's
+report asked for the PIN line under each CALLER: REFRESH_DRIFT_BIN at aa53fa4
+-> the four PIN cases.
 
 THE HOUSE STYLE (#470, 2026-10-25). A project marked as on the house style
 (.claude/directive-sync.json -> house_style: true) has styles/components.css
@@ -1372,6 +1374,21 @@ expect("callers drift: a workflow calling a shared workflow is a CALLER, never C
        res, 0, f"CALLER: .github/workflows/qa.yml — calls shared-qa.yml@{H}",
        absent="CUSTOM: .github/workflows/qa.yml")
 expect("callers drift: the SUMMARY counts it", res, 0, "1 CALLER")
+expect("callers drift: a caller on the pinned head says so on its PIN line",
+       res, 0, f"PIN: .github/workflows/qa.yml calls {H}, which is the pinned head")
+
+# The PIN line (claude.prop refresh, 2026-10-25): what a caller's ref runs,
+# compared with the head. SIDE has the head's tree on another commit, behind an
+# annotated tag, so it is functionally current without being the head.
+SIDE = git(UP, "commit-tree", f"{H}^{{tree}}", "-p", H, "-m", "side: the head's tree")
+git(UP, "tag", "-a", "v9", "-m", "v9", SIDE)
+for name, ref, needle in (
+        ("callers-pin-old", S, f"PIN: .github/workflows/qa.yml calls {S} ({S[:12]}); changed from there to the head {H[:12]}: templates/scripts -- a re-pin would take them"),
+        ("callers-pin-tag", "v9", f"PIN: .github/workflows/qa.yml calls v9 ({SIDE[:12]}); shared-qa.yml, templates/actions and templates/scripts are unchanged from there to the head {H[:12]} -- functionally current"),
+        ("callers-pin-gone", "v404", "PIN: .github/workflows/qa.yml calls v404, which could not be resolved or fetched -- not compared")):
+    r = project(name, changes={**ON_CALLERS, ".github/workflows/qa.yml": CALLER_QA.replace(f"@{H}", f"@{ref}")})
+    expect(f"callers drift: PIN line for a caller on {ref if ref[:1] == 'v' else 'an older SHA'}",
+           run(r, "refresh-drift.sh", env={"REFRESH_PIN": H}), 0, needle)
 
 r = project("callers-set", changes=ON_CALLERS)
 rc, out = run(r, "refresh-callers.sh", env={"REFRESH_PIN": H})

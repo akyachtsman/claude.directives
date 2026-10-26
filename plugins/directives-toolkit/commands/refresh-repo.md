@@ -444,6 +444,24 @@ such a project:
     caller runs it, either in a sibling job or through `contrast-script`.
   - A caller's `tests-dir:` input names its kit, just as `UI_TESTS_DIR` does
     in a full copy (`kit-dirs.sh`).
+- **Read each `PIN:` line.** Phase 1.5 prints one under each `CALLER`: the
+  commit the caller's ref names (a SHA, or a tag such as `v1`, resolved now),
+  and whether the shared workflow, `templates/actions/` or `templates/scripts/`
+  changed from there to the pinned head. Put it in the report as written.
+  "Functionally current" needs no re-pin. A changed path is a re-pin only the
+  owner decides (claude.prop refresh, 2026-10-25).
+- **Fix the CLAUDE.md lines the move made stale.** `CLAUDE.md` stays the
+  project's, but once a project is on callers some of its lines describe what
+  the callers replaced (claude.trading pilot, 2026-10-26). Find them:
+  ```bash
+  grep -nE 'secret-scan|ui-suite|validate-report-path|check-ui-viewports|LOCAL NOTE|[Jj]ob env|GREP_INVERT|Static Checks|UI Tests' CLAUDE.md
+  ```
+  Then rewrite or drop, in the refresh PR, each line that is now wrong: a
+  LOCAL NOTE in a deleted composite or script, a job-level `env:` setting
+  that now goes through an input (`GREP_INVERT` → `grep-invert`), a step that
+  moved into `project-checks`, a check name that now reads
+  `<caller job> / <job>`. Touch no other line, and list each change in the
+  report.
 - **Never move a project onto callers.** A refresh only keeps callers a project
   already has. Moving to callers is the owner's choice for each project (#460).
 

@@ -9,6 +9,8 @@ export default defineConfig({
   testDir: './tests',
   timeout: 30_000,
   retries: 0,
+  // What a project feeding the grep-invert input does (claude.trading).
+  grepInvert: process.env.GREP_INVERT ? new RegExp(process.env.GREP_INVERT) : undefined,
   reporter: [['list'], ['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]],
   use: {
     baseURL: (process.env.APP_URL || 'http://localhost:8080').replace(/\/?$/, '/'),

@@ -46,9 +46,14 @@ The shared workflow stages `notify-email.js` (the SMTP helper `notify-task.js`
 > editable without a redeploy. **On a public repo, never put a credential
 > (`SMTP_PASS`, any key or PAT) in a Variable — Variables are world-readable.**
 
-> The task's own backend inputs are separate, added to the workflow's `env:`
-> block: `DB_URL` is a **Variable**, `DB_SERVICE_KEY` is a **Secret** (see the
-> data directive `data.md`).
+> The task's own backend inputs are separate (see the data directive
+> `data.md`). `env` does not pass into a called workflow, so the caller's
+> `env:` block cannot carry them. Instead:
+> 1. Add `DB_URL` as a **Variable**. The shared workflow reads it by itself.
+> 2. Add `DB_SERVICE_KEY` as a **Secret**.
+> 3. In `.github/workflows/cron-notify.yml`, uncomment the
+>    `DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}` line under `secrets:`.
+>    A secret reaches the task only when the caller passes it by name.
 
 ### Getting a Gmail / Google Workspace app password
 1. Enable **2-Step Verification** (myaccount.google.com → Security).

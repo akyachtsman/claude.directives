@@ -130,6 +130,21 @@ never move, and the next release still counts up from the highest one.
   filter reports it as a notice ("not published; probed") instead of the
   "matches nothing" warning, which stays for an entry inside `site-dir` or
   nowhere at all. The template has the same rule.
+- **A live run for every commit (apfp.claude pilot, 2026-10-26).** The
+  template groups live runs by ref, so a newer deploy cancels an older one
+  still running; the newest commit carries the older one's changes. apfp.claude
+  ruled (2026-08-26) that every merged commit gets its own live run, and its
+  pilot found two merges inside one ~20-minute run lost the first. With
+  `every-commit: true`, `shared-qa-live.yml` groups a deploy-triggered run by
+  the deployed commit instead. The default is unchanged.
+- **The deploy's evidence and its instructions (apfp.claude pilot).** The
+  live-site check prints one line per path, pass or fail, and lists each
+  path's HTTP codes in the step summary, so a green run shows what each path
+  answered. These are plain lines, not `::notice::` annotations, because
+  GitHub keeps only the first few annotations of a step and the lists hold up
+  to 60 paths. The re-run refusal and the deploy-timeout messages name the
+  caller's own workflow (`$GITHUB_WORKFLOW`), not `Pages Deploy`: apfp.claude's
+  caller is named `Pages`. The template has both changes.
 
 ## What a project keeps (claude.prop pilot, 2026-10-25)
 
@@ -165,6 +180,11 @@ The pilot ran `qa`, `qa-live` (published lookup and live suite) and
 `qa-response` for real. prop has no `pages-deploy.yml` and no `cron-notify.yml`,
 so `shared-pages-deploy.yml` and `shared-cron-notify.yml` are still unproven
 across repositories.
+apfp.claude #1223 (merged as `a4424ab`, 2026-10-26) was the first to call
+`shared-pages-deploy.yml`, with its live run on `shared-qa-live.yml` and the
+admin project (12 tests). It found the three gaps above under *How a callable
+workflow differs*. `shared-cron-notify.yml` is still unproven across
+repositories.
 
 ## Spike findings (2026-10-19)
 

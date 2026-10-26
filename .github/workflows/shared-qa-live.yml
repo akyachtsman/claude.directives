@@ -57,6 +57,10 @@ on:
         description: true runs the project's gated admin project (apfp.claude D27) on a deploy-triggered run, exporting ADMIN_SUITE=1 and TEST_ADMIN_CREDENTIAL to the suite. A manual dispatch never gets either, since it can run any branch's code.
         type: boolean
         default: false
+      every-commit:
+        description: true gives each deployed commit its own live run, so a newer deploy no longer cancels an older commit's run still in progress (apfp.claude, per its 2026-08-26 ruling). Costs a full run per merge, and runs on different commits may overlap. Default false keeps the template's rule, newest deploy wins.
+        type: boolean
+        default: false
     secrets:
       DIRECTIVES_READ_TOKEN:
         description: Needed only if claude.directives turns private, where the run's own token cannot read it. A read-only token for that one repo; unset, the shared files are fetched with the run's own token.
@@ -132,9 +136,12 @@ jobs:
          github.event.workflow_run.head_repository.full_name == github.repository)) &&
        needs.published.outputs.published != 'none')
     # The template's workflow-level concurrency, moved onto this job so the
-    # caller needs none. Its reasoning: templates/workflows/qa-live.yml.
+    # caller needs none. Its reasoning: templates/workflows/qa-live.yml. With
+    # every-commit, a run that will test a deploy is grouped by the deployed
+    # commit instead of the ref: two merges no longer share a group, while two
+    # deploys of one commit (the managed build and an Actions deploy) still do.
     concurrency:
-      group: shared-qa-live-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && format('skipped-{0}', github.run_id) || github.event_name == 'workflow_run' && github.event.workflow_run.event != 'dynamic' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('offbranch-{0}', github.run_id) || github.ref }}
+      group: shared-qa-live-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && format('skipped-{0}', github.run_id) || github.event_name == 'workflow_run' && github.event.workflow_run.event != 'dynamic' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('offbranch-{0}', github.run_id) || inputs.every-commit && format('commit-{0}', github.event.workflow_run.head_sha) || github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     # 120 is the fleet FLOOR for a ui-suite caller. Set HIGHER if your suite

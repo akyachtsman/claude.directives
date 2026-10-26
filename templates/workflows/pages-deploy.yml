@@ -355,7 +355,7 @@ jobs:
       - name: Refuse a re-run of the publish
         if: github.run_attempt > 1
         run: |
-          echo "::error::a re-run would publish ${GITHUB_SHA:0:7} again, which may no longer be main's tip. Dispatch a new run on main instead (Actions -> Pages Deploy -> Run workflow)."
+          echo "::error::a re-run would publish ${GITHUB_SHA:0:7} again, which may no longer be main's tip. Dispatch a new run on main instead (Actions -> ${GITHUB_WORKFLOW} -> Run workflow)."
           exit 1
 
       - name: Start the attempt clock
@@ -378,7 +378,7 @@ jobs:
         run: |
           elapsed=$(( $(date +%s) - T0 ))
           if [ "$elapsed" -ge 480 ]; then
-            echo "::error::deploy attempt 1 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, dispatch a new run on main (a re-run of this one is refused)."
+            echo "::error::deploy attempt 1 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, dispatch a new run on main (Actions -> ${GITHUB_WORKFLOW} -> Run workflow; a re-run of this one is refused)."
             exit 1
           fi
           sleep 30
@@ -397,7 +397,7 @@ jobs:
         run: |
           elapsed=$(( $(date +%s) - T0 ))
           if [ "$elapsed" -ge 480 ]; then
-            echo "::error::deploy attempt 2 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, dispatch a new run on main (a re-run of this one is refused)."
+            echo "::error::deploy attempt 2 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, dispatch a new run on main (Actions -> ${GITHUB_WORKFLOW} -> Run workflow; a re-run of this one is refused)."
             exit 1
           fi
           sleep 60
@@ -446,7 +446,7 @@ jobs:
           set -euo pipefail
           url="$PAGE_URL"
           case "$url" in */) ;; *) url="${url}/" ;; esac
-          problems=""
+          problems=""; evidence=""
           # One site-relative path per line, `#` comments and blank lines ignored.
           read_list() {
             [ -f "$1" ] || return 0
@@ -528,14 +528,21 @@ jobs:
             # Two probes 30s apart: one 404 can be the PREVIOUS deploy while the
             # CDN propagates, and a new public file may not be live on the first.
             sleep 30
+            # One line per path, pass or fail, so a green run is evidence of
+            # what each path answered. Plain log lines, not ::notice:: (GitHub
+            # keeps only the first few annotations of a step).
             for i in "${!deny[@]}"; do
               second=$(probe "${deny[i]}" d2)
+              echo "deny   ${deny[i]}: ${first[i]} then ${second} (expected 404 then 404)"
+              evidence="${evidence}- deny \`${deny[i]}\`: ${first[i]} then ${second}\n"
               if [ "${first[i]}" != "404" ] || [ "$second" != "404" ]; then
                 problems="${problems}- ${url}${deny[i]} served HTTP ${first[i]} then ${second}, expected 404 on both\n"
               fi
             done
             for i in "${!public[@]}"; do
               pc=$(probe "${public[i]}" p)
+              echo "public ${public[i]}: ${pc} (expected 200)"
+              evidence="${evidence}- public \`${public[i]}\`: ${pc}\n"
               [ "$pc" = "200" ] || problems="${problems}- ${url}${public[i]} (declared public) served HTTP ${pc}, expected 200\n"
             done
           elif [ $((n + m)) -gt 0 ]; then
@@ -551,6 +558,12 @@ jobs:
               echo "- Deny-list: ${n} path(s) probed twice, 30s apart"
             fi
             echo "- Declared public paths (.github/pages-public.txt): ${m}"
+            if [ -n "$evidence" ]; then
+              echo ""
+              echo "Each path, as served (HTTP codes):"
+              echo ""
+              printf '%b' "$evidence"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$problems" ]; then
             printf '%b' "$problems" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -2151,6 +2151,23 @@ const CASES = [
         { projectName: 'phone', annotations: [rv(390)], results: [{ status: 'passed' }] },
       ] }] }] }) },
     0, '  disposition: RENDERED laptop,tablet,phone\n', { reportArg: 'old.json' }],
+
+  // THE COUNT LINE SAYS WHAT IT COUNTS (claude.prop, 2026-10-25). It read
+  // "N of M test(s) with a non-skipped result", but a test marked
+  // viewport-override is not counted either, so prop saw 24 of 236 beside
+  // Playwright's 224 passed. Five tests: three counted, one skipped, one marked.
+  ['the count line names both exclusions: skipped and viewport-override',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'count.json': JSON.stringify({ suites: [{ specs: [{ title: 'c', tests: [
+        { projectName: 'desktop', annotations: [rv(1440)], results: [{ status: 'passed' }] },
+        { projectName: 'tablet', annotations: [rv(810)], results: [{ status: 'passed' }] },
+        { projectName: 'phone', annotations: [rv(390)], results: [{ status: 'passed' }] },
+        { projectName: 'phone', annotations: [], results: [{ status: 'skipped' }] },
+        { projectName: 'desktop', annotations: [{ type: 'viewport-override', description: '390' }],
+          results: [{ status: 'passed' }] },
+      ] }] }] }) },
+    0, '3 of 5 test(s) counted toward a viewport class; the other 2 were skipped or marked viewport-override)',
+    { reportArg: 'count.json', mustNotSay: ['non-skipped result)'] }],
 ];
 
 // Writes a copy of the gate with the config-evaluation child's bound replaced.

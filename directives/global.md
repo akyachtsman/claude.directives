@@ -1288,8 +1288,8 @@ client-side Supabase + RLS.
   change:
   - **PR QA (`qa.yml`)** runs the same build and serves the build's output
     directory instead of the repo root, on every PR, so it never tests the
-    unbuilt tree. The template does both once its `BUILD_CMD` and `SITE_DIR`
-    are set to the same values as `pages-deploy.yml`; its `BUILD_PATHS` lists
+    unbuilt tree. The caller does both once its `build-cmd` and `site-dir`
+    inputs are set to the same values as `pages-deploy.yml`'s; its `BUILD_PATHS` lists
     the build inputs for the toolkit's Pages edit reminder.
   - **Live QA:** add the deploy workflow's exact `name:`
     ("Pages Deploy" for `pages-deploy.yml`) to `qa-live.yml`'s

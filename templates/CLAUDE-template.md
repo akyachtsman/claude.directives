@@ -22,7 +22,7 @@ If a URL fails, run `claude plugin marketplace update claude-directives` and rea
 - **Build:** none
   <!-- The default. An opted-in build replaces "none" with the need it serves,
   the owner's sign-off with its date, the build command and output directory
-  that pages-deploy.yml and qa.yml carry as BUILD_CMD and SITE_DIR, and the
+  that the pages-deploy.yml and qa.yml callers pass as build-cmd and site-dir, and the
   build inputs qa.yml carries as BUILD_PATHS (global.md, Hosting & Deployment). -->
 - **Branch policy:** Develop on a `claude/<name>` feature branch; PRs target `main`
 

@@ -11,6 +11,8 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
 
+If a URL fails, run `claude plugin marketplace update claude-directives` and read the same path under `~/.claude/plugins/marketplaces/claude-directives/` (`global.md` → *Session Start*).
+
 ---
 
 ## Project Overview

@@ -21,17 +21,21 @@ Execute in order:
 1. **Pin one upstream SHA, then fetch and internalize all five directives at
    it.** Resolve `main` ONCE for this run —
    `git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1`
-   — and fetch every upstream file this bootstrap reads at that `<SHA>`
-   (`https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/<path>`),
-   never at a moving `main`: a merge landing mid-run would otherwise install two
-   revisions of the standard side by side. Every `claude.directives/<path>`
-   source in the steps below means `<path>` at this SHA. Read each directive
-   fully before proceeding:
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/global.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/git.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/design.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/test.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/data.md`
+   — and read every upstream file this bootstrap needs at that `<SHA>`, never
+   at a moving `main`: a merge landing mid-run would otherwise install two
+   revisions of the standard side by side. Read them over **git**, not raw
+   URLs, so the bootstrap works whether claude.directives is public or private
+   (private, git reaches it only where the repo is attached to the session).
+   Fetch the SHA once into a scratch bare repo, never this project's `.git`:
+   `d=$(mktemp -d) && git init -q --bare "$d" && git -C "$d" fetch -q --depth=1 https://github.com/akyachtsman/claude.directives.git <SHA>`,
+   then read each file with `git -C "$d" show <SHA>:<path>`. Every
+   `claude.directives/<path>` source in the steps below means `<path>` at this
+   SHA, read that way. Read each directive fully before proceeding:
+   - `directives/global.md`
+   - `directives/git.md`
+   - `directives/design.md`
+   - `directives/test.md`
+   - `directives/data.md`
 
 2. **Verify the directives-toolkit plugin attached** (it carries this very
    command, all skills, the QA/data agents, and the guard hooks). If its
@@ -43,8 +47,8 @@ Execute in order:
    `claude/<name>` branch; otherwise create `claude/<name>`. Never work on `main`.
 
 4. **Create `CLAUDE.md`** in the repo root from the canonical scaffold
-   `templates/CLAUDE-template.md` in this repo — fetch it raw at step 1's SHA:
-   `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/templates/CLAUDE-template.md`
+   `templates/CLAUDE-template.md` in this repo — read it at step 1's SHA:
+   `git -C "$d" show <SHA>:templates/CLAUDE-template.md`
    Write it as `CLAUDE.md`, drop the scaffold's HTML comment, fill in the repo
    name and live URL from context (`APP_URL` variable / repo name), and leave
    the [bracketed] sections as placeholders for the human to complete
@@ -105,13 +109,13 @@ Execute in order:
 
    ```bash
    sha="…step 1's SHA…"   # NOT main — that ref moves under you
-   raw="https://raw.githubusercontent.com/akyachtsman/claude.directives/$sha"
+   d="…step 1's scratch bare repo, holding $sha…"
    callers="…every templates/workflows/*.yml this step installs, every
             templates/actions/*/action.yml, and directives/global.md git.md
             design.md test.md data.md (each as directives/<name>)…"
    buf=$(mktemp)
    for c in $callers; do
-     curl -fsSL "$raw/$c" >>"$buf" \
+     git -C "$d" show "$sha:$c" >>"$buf" \
        || { echo "FETCH FAILED: $c — bootstrap STOPS here" >&2; rm -f "$buf"; exit 1; }
      printf '\n' >>"$buf"   # token boundary: a caller need not end in a newline
    done

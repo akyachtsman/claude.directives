@@ -57,6 +57,9 @@ on:
         type: boolean
         default: false
     secrets:
+      DIRECTIVES_READ_TOKEN:
+        description: Needed only if claude.directives turns private, where the run's own token cannot read it. A read-only token for that one repo; unset, the shared files are fetched with the run's own token.
+        required: false
       SMTP_PASS:
         required: false
       DB_SERVICE_KEY:
@@ -90,6 +93,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: ${{ job.workflow_repository }}
+          token: ${{ secrets.DIRECTIVES_READ_TOKEN || github.token }}
           ref: ${{ job.workflow_sha }}
           path: .claude-directives
           persist-credentials: false

@@ -40,7 +40,8 @@ verdict. Read-only — do NOT modify files. Execute in order:
 5. Infra monitors — Confirm any monitoring workflows declared in the repo's
    automation spec exist on the default branch.
 6. Directive freshness — Read CLAUDE.md and extract every imported directive
-   URL. For each: check reachability (404?), coverage (any upstream files not
+   URL. For each: check reachability (404?: read it from the git copy instead,
+   per `global.md` → *Session Start* step 1, and report which copy was read), coverage (any upstream files not
    imported?), and content drift (compare against .claude/directive-sync.json
    snapshot — if no snapshot exists, do NOT create one; report "no baseline"
    as a finding and suggest recording one as an explicit follow-up task, so
@@ -50,7 +51,8 @@ verdict. Read-only — do NOT modify files. Execute in order:
    claude.directives `main`. Get that HEAD with
    `git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main`
    — git transport, so it needs no auth, no MCP and no quota, and works from a
-   session scoped to any repo. Do **not** depend on `api.github.com`: the proxy
+   session scoped to any repo while claude.directives is public (private, it
+   works only where the repo is attached to the session). Do **not** depend on `api.github.com`: the proxy
    refuses it — and so `gh api`, curl and WebFetch alike — for any repository the
    session was not opened on, which from a downstream project includes
    claude.directives (verified 2026-10-09: 403, "GitHub access to this

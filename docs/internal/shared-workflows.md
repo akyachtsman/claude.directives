@@ -71,6 +71,14 @@ never move, and the next release still counts up from the highest one.
   `job.workflow_sha`, and reads the composites and scripts from there. The job
   then adds `.claude-directives/` to the caller's `.git/info/exclude`, so the
   caller's secret scan does not read it.
+  That checkout uses the run's own token, which reads this repo only while it
+  is public. If it turns private, a caller must itself be private (GitHub lets
+  no public repo call a workflow in a private one), this repo's
+  Settings → Actions → General → Access must allow the owner's repositories,
+  and the caller passes a read-only token for this repo as the optional
+  `DIRECTIVES_READ_TOKEN` secret, which every such checkout prefers when set.
+  The composite-action route does not help here: `uses:` takes no expression,
+  so it cannot follow the commit the caller pinned.
 - **Settings are inputs.** What a project edited into its copy's `env:`
   (`UI_TESTS_DIR`, `BUILD_CMD`, `SITE_DIR`, the advisory flag) is an input,
   because a caller's `env` does not pass into a called workflow. `BUILD_PATHS`

@@ -638,8 +638,9 @@ project's own `.github/` copies would miss precisely the case this exists for �
 **a script newly referenced by the caller you are about to install**, which by
 definition the installed copy does not yet mention.
 
-So the input is the fetched upstream text, using the same `$raw` this command
-already establishes, over **every caller this refresh INSTALLS** — not a fixed
+So the input is the fetched upstream text, read over git at the head Phase 2
+classified (so it works whether claude.directives is public or private), over
+**every caller this refresh INSTALLS** — not a fixed
 list, and **not only the changed ones**:
 
 ⚠️ **The installed set is WIDER than the delta.** The composites row above
@@ -673,24 +674,27 @@ repo="akyachtsman/claude.directives"
 head=$(cat "$(git rev-parse --git-path refresh-repo-classified)" 2>/dev/null)
 printf '%s' "$head" | grep -qE '^[0-9a-f]{40}$' \
   || { echo "no Phase 2 SHA — run refresh-delta.sh first; derivation NOT run" >&2; exit 1; }
-raw="https://raw.githubusercontent.com/$repo/$head"
 # Append each newly installed caller as an argument, e.g. templates/workflows/qa-live.yml
 callers=$(REFRESH_PIN="$head" bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-callers.sh") \
   || { echo "CALLER SET FAILED — derivation INVALID, do not use it" >&2; exit 1; }
+# One scratch bare repo holding that commit, never this project's .git.
+d=$(mktemp -d)
+git init -q --bare "$d" && git -C "$d" fetch -q --depth=1 "https://github.com/$repo.git" "$head" \
+  || { echo "FETCH FAILED: $repo@$head — derivation INVALID, do not use it" >&2; rm -rf "$d"; exit 1; }
 
 buf=$(mktemp)
 for c in $callers; do
-  curl -fsSL "$raw/$c" >>"$buf" \
+  git -C "$d" show "$head:$c" >>"$buf" \
     || { echo "FETCH FAILED: $c — derivation INVALID, do not use it" >&2
-         rm -f "$buf"; exit 1; }
+         rm -f "$buf"; rm -rf "$d"; exit 1; }
   printf '\n' >>"$buf"   # token boundary — see the third bullet below
 done
 # The derivation itself lives in ONE file, which Phase 3's applied-check runs
 # too, so the install and the check can never name different sets (#398).
 derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf") \
   || { echo "DERIVATION FAILED — derivation INVALID, do not use it" >&2
-       rm -f "$buf"; exit 1; }
-rm -f "$buf"
+       rm -f "$buf"; rm -rf "$d"; exit 1; }
+rm -f "$buf"; rm -rf "$d"
 refs=$(printf '%s\n' "$derived" | sort -u)
 printf '%s\n' "$refs"
 ```

@@ -5,7 +5,8 @@ The company-wide agent behavior standard, imported by every project repo via raw
 GitHub URL. Every rule here applies to every Claude Code session unless a repo
 explicitly overrides it.
 A `docs/…` path in these directives resolves against claude.directives:
-`https://raw.githubusercontent.com/akyachtsman/claude.directives/main/<path>`.
+`https://raw.githubusercontent.com/akyachtsman/claude.directives/main/<path>`,
+or the same `<path>` in a git copy when that URL fails (→ *Session Start*).
 
 ## Identity
 - Owner: akyachtsman
@@ -14,7 +15,12 @@ A `docs/…` path in these directives resolves against claude.directives:
 
 ## Session Start
 At the start of every session:
-1. Read this file fully and fetch all imported directive URLs.
+1. Read this file fully and fetch all imported directive URLs. If a URL
+   fails (a private claude.directives answers raw reads with 404), read the
+   same path from the toolkit's git copy instead: run
+   `claude plugin marketplace update claude-directives`, then read
+   `~/.claude/plugins/marketplaces/claude-directives/<path>`. Say which copy
+   you read; never start work on directives you could not read.
 2. Verify the `directives-toolkit` plugin attached (commands/agents resolve —
    see Skill Bootstrap below), and run `/env-chk`'s scope verification to
    confirm which repo(s) this session can actually act on before promising
@@ -964,6 +970,13 @@ Two different scopes — never conflate them:
   enabled for this session"). `/do-repo` packages this. **NEVER claim a
   public repo "can't be seen"** — that confuses ACT scope with READ scope;
   verify by fetching, then answer from data.
+- **claude.directives is read-only to every other project** (owner ruling,
+  2026-10-26). A project may attach it so its sessions can read the directives
+  and install the toolkit over git, and that attach grants write access too.
+  Use it only to read and clone: never branch, push, comment, open a PR or
+  merge there. A fix found there goes to the owner as a paste-ready hand-off
+  (→ *One Session, One Repo*). Only a session opened for claude.directives
+  itself writes to it.
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
   the same verification at session start.
 

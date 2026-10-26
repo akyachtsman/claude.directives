@@ -25,6 +25,12 @@ into its **Setup script** field:
 ```
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/scripts/install-toolkit.sh | bash
 ```
+If claude.directives is ever made **private**, that URL answers 404. Add the
+repo to the project first (Project settings → Repositories), then use this line
+instead, which reads it over git:
+```
+claude plugin marketplace add akyachtsman/claude.directives && bash ~/.claude/plugins/marketplaces/claude-directives/scripts/install-toolkit.sh
+```
 Set **Network access** so sessions can reach what the toolkit needs. The default
 **Trusted** level allows GitHub + package registries (enough to install), but it
 **blocks two hosts every project here uses** — so use **Custom** (keep the default

@@ -33,6 +33,11 @@ if [ -f templates/claude-settings.json ] \
 else
   tpl=$(curl -fsSL --max-time 30 \
     https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/claude-settings.json 2>/dev/null) || tpl=
+  # A private claude.directives answers that with 404: fall back to the
+  # marketplace's git clone, which the toolkit install keeps on disk.
+  if [ -z "$tpl" ]; then
+    tpl=$(cat "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/marketplaces/claude-directives/templates/claude-settings.json" 2>/dev/null) || tpl=
+  fi
 fi
 if [ -z "$tpl" ] || ! jq -e '.permissions.allow | type == "array"' >/dev/null 2>&1 <<<"$tpl"; then
   echo "CANNOT CHECK — the template's permissions.allow could not be read; nothing compared"; exit 0

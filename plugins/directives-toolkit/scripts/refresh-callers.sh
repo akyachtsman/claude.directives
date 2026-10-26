@@ -52,10 +52,13 @@ $1
 "*) return 1 ;; esac; set_="$set_
 $1"; }
 queue=
+kept=
 for w in .github/workflows/*.yml; do
   [ -f "$w" ] || continue
   if called=$(refresh_caller_of "$w"); then
     echo "refresh-callers: $w calls $called -- kept, not installed; its template's composites and scripts are not derived" >&2
+    kept="$kept
+templates/workflows/${w#.github/workflows/}"
     continue
   fi
   t="templates/workflows/${w#.github/workflows/}"
@@ -101,6 +104,8 @@ while IFS= read -r d; do
   case "$d" in directives/*.md) add "$d" ;; esac
 done <<<"$shipped"
 # The delta's callers that are absent here: a decision, so a hint, not an add.
+# A template whose workflow is a caller is present, and named above as kept,
+# so it gets no hint (claude.prop refresh, 2026-10-26).
 delta=$(cat "$(refresh_marker delta)" 2>/dev/null) || delta=
 while IFS=$(printf '\t') read -r st p; do
   [ "$st" = D ] && continue
@@ -108,6 +113,7 @@ while IFS=$(printf '\t') read -r st p; do
     templates/workflows/*.yml | templates/actions/*/action.yml)
       case "
 $set_
+$kept
 " in *"
 $p
 "*) ;; *) echo "refresh-callers: the delta lists $p, absent here — name it as an argument if this refresh installs it" >&2 ;; esac ;;

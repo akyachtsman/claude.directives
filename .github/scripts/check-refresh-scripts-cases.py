@@ -47,7 +47,11 @@ case only. The stamp's "nothing deleted is required" cases hold against the
 old stamp too: it already read each workflow's own text, so they pin that
 behaviour rather than prove a fix. REFRESH_LIB_BIN (no refresh_caller_of) ->
 7: every one of the above, plus the older caller-set case, whose output then
-carries the missing function's error.
+carries the missing function's error. The claude.prop refresh (2026-10-26)
+added two: refresh-vars.sh names a caller instead of comparing its template,
+and refresh-callers.sh gives a caller's template no "absent here" hint.
+MEASURED against the scripts at 137ed12: REFRESH_VARS_BIN -> both callers-vars
+cases; REFRESH_CALLERS_BIN -> the no-hint case only.
 
 THE HOUSE STYLE (#470, 2026-10-25). A project marked as on the house style
 (.claude/directive-sync.json -> house_style: true) has styles/components.css
@@ -1400,6 +1404,31 @@ r = project("callers-kit", changes={**ON_CALLERS,
 rc, out = run(r, "kit-dirs.sh")
 check("kit-dirs: a caller's tests-dir names its kit; a full copy's expression is not a path",
       rc == 0 and out.strip() == "e2e", f"exit {rc}; got: {out!r}")
+
+# The claude.prop refresh of 2026-10-26: qa-live.yml a caller since the
+# stamp. Its template's reads (APP_URL and the rest) are no new reads, and the
+# delta listing that template is no "absent here".
+CALLER_LIVE = f"""name: QA Live
+on: [workflow_run]
+jobs:
+  live:
+    uses: akyachtsman/claude.directives/.github/workflows/shared-qa-live.yml@{H}
+"""
+r = project("callers-vars", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": CALLER_LIVE})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-vars.sh")
+expect("callers vars: a caller is named, not compared with its template",
+       res, 0, f"caller: .github/workflows/qa-live.yml calls shared-qa-live.yml@{H} -- not compared",
+       absent="OWNER PRE-MERGE")
+expect("callers vars: ...so its template's reads print the OK line",
+       res, 0, "OK: no new repository variables or secrets read (3 installed template(s)")
+rc, out = run(r, "refresh-callers.sh")
+check("callers set: a delta template whose workflow is a caller gets no 'absent here' hint",
+      rc == 0 and "templates/workflows/qa-live.yml, absent here" not in out
+      and "refresh-callers: .github/workflows/qa-live.yml calls shared-qa-live.yml@" in out, f"exit {rc}; got:\n{out}")
+check("callers set: ...while a delta template with no workflow here still gets it",
+      "the delta lists templates/workflows/new.yml, absent here" in out, out)
 
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(CASES.finish(f"{CASES.passed} refresh-script behaviours hold against a fixture upstream."))

@@ -430,6 +430,11 @@ such a project:
   them, so their absence never refuses the stamp. A composite in the delta reads
   `absent locally, not compared`, and the stamp prints one `caller:` line for
   each caller.
+- **A caller adds no variable.** `refresh-vars.sh` names each caller on a
+  `caller:` line and does not compare it with its template, because the
+  refresh installs nothing over it. A variable the shared workflow newly reads
+  arrives when the called ref moves (a re-pin, or a release moving `v1`), not
+  through a refresh (claude.prop refresh, 2026-10-26).
 - **What stays a copy.** The UI-test kit, `CLAUDE.md`, `.claude/settings.json`,
   the hook and `styles/` stay copies (#460, the owner's target shape). So does
   every script a directive or the caller itself names:

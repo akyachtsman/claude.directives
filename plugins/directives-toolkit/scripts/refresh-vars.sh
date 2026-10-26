@@ -24,15 +24,26 @@
 # GitHub supplies it.
 # Names compare case-insensitively, as GitHub resolves them.
 #
+# A CALLER IS NOT COMPARED (#460 step 4; claude.prop refresh, 2026-10-26). A
+# workflow that calls a shared workflow (refresh-lib.sh -> refresh_caller_of)
+# replaced its template, and the refresh installs nothing over it. What it reads
+# is its own text plus the shared workflow at the ref it calls, and neither
+# moves with this refresh. Comparing its template against it listed every read
+# the template had (APP_URL, APP_PAGES, the three TEST_AUTH_* variables) as
+# newly read, though the project already ran with all of them. Each one is
+# named on a `caller:` line instead. A read the shared workflow adds reaches the
+# project when that ref moves (a re-pin, or a release moving `v1`), never
+# through a refresh, so this script cannot be the one to flag it.
+#
 # WHAT IT CANNOT SEE. Whether the variable is SET (that needs the API above),
 # and a read that existed at the stamp but newly became REQUIRED: the pilots'
 # APP_URL was read by every version of qa-live.yml, and what changed was the
 # fallback the project relied on. A NEW read is the case this script decides.
 #
-# Prints `pinned:`, then one `OWNER PRE-MERGE:` line per new name, or the
-# explicit `OK: no new repository variables or secrets read` line, never
-# silence. Exit 0 when compared (the lines are owner items, not failures),
-# 2 when it could not be.
+# Prints `pinned:`, one `caller:` line per caller, then one `OWNER PRE-MERGE:`
+# line per new name, or the explicit `OK: no new repository variables or
+# secrets read` line, never silence. Exit 0 when compared (the lines are owner
+# items, not failures), 2 when it could not be.
 # shellcheck source=refresh-lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/refresh-lib.sh" \
   || { echo "CANNOT-VERIFY: refresh-lib.sh not loadable — new variables and secrets NOT checked"; exit 2; }
@@ -168,6 +179,10 @@ for f in .github/workflows/*.yml .github/actions/*/action.yml; do
   [ -f "$f" ] || continue
   t=$(refresh_template_of "$f")
   git -C "$up" cat-file -e "$pin:$t" 2>/dev/null || continue
+  if called=$(refresh_caller_of "$f"); then
+    echo "caller: $f calls $called -- not compared with $t: the refresh installs nothing over it, and a read the shared workflow adds arrives when that ref moves"
+    continue
+  fi
   templates+=("$t")
   [ -n "$stamp" ] && git show "$base:$f" 2>/dev/null | reads strip >>"$up/old"
 done

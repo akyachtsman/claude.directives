@@ -135,11 +135,13 @@ Over git transport, at the pinned head. Per file it prints one of:
   onto a caller is the owner's call for that project (#460).
 - **`SHARED-COPY`** — an installed copy of a composite (one line per directory)
   or of a script that only the shared workflows use now (`secret-scan`,
-  `ui-suite`, `check-ui-viewports.js`, `notify-email.js`, `check-contrast.js`).
-  Not compared. The line says which of the project's files still name it: none
-  means delete it in this refresh's PR; a name means the project still uses it
-  (its own `check-contrast.js` in a caller's `contrast-script`, a workflow of
-  its own), so it stays, uncompared.
+  `ui-suite`, `check-ui-viewports.js`, `notify-email.js`).
+  Not compared. The line says which of the project's files still name it, by
+  its path or, from another file under `.github/scripts`, by its bare name (a
+  sibling loaded by a relative path: `notify-task.js` loads
+  `./notify-email.js`): none means delete it in this refresh's PR; a name means
+  the project still uses it (a workflow of its own, a task that loads it), so
+  it stays, uncompared.
 - `NO-TEMPLATE`, `CANNOT-VERIFY`, `RETIRED` — below — then the house-style
   lines (*The house style* below) and one `SUMMARY` line.
 - **`RE-RECORD`** — after `SUMMARY`, only when there are any: the count and

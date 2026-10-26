@@ -1282,7 +1282,12 @@ r = project("callers-own-input", scripts=INSTALLED_SCRIPTS + ("notify-task.js", 
                                          "    secrets: inherit\n"})
 res = run(r, "refresh-drift.sh", env={"REFRESH_PIN": H})
 expect("callers drift: a script a shared workflow's input defaults to is the project's, never a SHARED-COPY (Codex, #488)",
-       res, 0, "SHARED-COPY: .github/scripts/notify-email.js", absent="notify-task.js")
+       res, 0, "SHARED-COPY: .github/scripts/notify-email.js", absent="SHARED-COPY: .github/scripts/notify-task.js")
+# ...and the helper that task loads by a relative path is kept while it does:
+# an OWN cron workflow stages no helper, so deleting it fails the next run.
+check("callers drift: a shared copy a project script loads by a relative path is kept (Codex, #488)",
+      "notify-email.js from claude.directives at the called commit; not compared. "
+      "Still named by: .github/scripts/notify-task.js -- keep it while they do" in res[1], res[1])
 
 r = project("callers-kit", changes={**ON_CALLERS,
                                     ".github/workflows/qa.yml": CALLER_QA.replace(".github/scripts/ui-tests", "e2e"),

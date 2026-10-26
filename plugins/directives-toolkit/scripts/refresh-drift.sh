@@ -257,6 +257,16 @@ gone=()
 users_of() {
   git grep -lF -e "$1" -- . ":(exclude)$2" "${gone[@]}" 2>/dev/null | paste -sd, - | sed 's/,/, /g'
 }
+# script_users_of <path>: as users_of, plus every other file under
+# .github/scripts that names its bare file name, since a script loads a
+# sibling by a relative path (notify-task.js: require('./notify-email.js')),
+# which the full path never matches. An OWN workflow stages no helper, so
+# deleting one a kept task still loads fails its next run (Codex, #488).
+script_users_of() {
+  { git grep -lF -e "$1" -- . ":(exclude)$1" "${gone[@]}"
+    git grep -lF -e "${1##*/}" -- .github/scripts ":(exclude)$1" "${gone[@]}"
+  } 2>/dev/null | sort -u | paste -sd, - | sed 's/,/, /g'
+}
 # shared_line <path> <what> <users>: one SHARED-COPY line.
 shared_line() {
   if [ -n "$3" ]; then
@@ -344,7 +354,7 @@ for f in .github/workflows/*.yml .github/workflows/*.yaml .github/actions/*/* \
   [ -n "$script" ] && own_input "$f" && continue   # the project's input: silent (header)
   if [ -n "$script" ] && ! named_script "$f"; then
     [ "$dok" = yes ] || continue   # the set is unknown: said once, above
-    shared_line "$f" "no directive names it, and the shared workflows read $t from claude.directives at the called commit" "$(users_of "$f" "$f")"
+    shared_line "$f" "no directive names it, and the shared workflows read $t from claude.directives at the called commit" "$(script_users_of "$f")"
     shared=$((shared + 1))
     continue
   fi

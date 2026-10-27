@@ -22,7 +22,6 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 | `check-report-path-cases.py` | that script's header |
 | `check-contrast-cases.js` | that script's header |
 | `check-refresh-derivation.py`, `check-refresh-derivation-cases.py` | each script's header |
-| `check-action-siblings.py`, `check-action-siblings-cases.py` | each script's header |
 | `check-run-quoting.py`, `check-run-quoting-cases.py` | each script's header |
 | `check-browser-ladder-cases.js` | that script's header |
 | `check-links.js`, `check-links-cases.js` | each script's header |
@@ -59,6 +58,8 @@ downstream project's CI rather than ours.
 
 | Gate | Retired | Why |
 |---|---|---|
+| `check-action-siblings.py` and `check-action-siblings-cases.py` | 2026-10-27 (#460 step 5) | They refused an untracked file under `templates/actions/*/`, because `/new-repo` and `/refresh-repo` once copied a composite's directory and twice copied only its `action.yml` (#353). Since Phase E of #460 step 4 neither installs a composite: the shared workflows check this repo out at the called commit, so a composite's siblings are whatever that commit tracks, and `qa.yml`'s `Shared QA self-test` runs both composites from exactly such a checkout on every PR. An untracked sibling now fails there |
+| Check 6's npm-in-YAML reader in `check-refresh-derivation.py`, with its eleven cases | 2026-10-27 (#460 step 5) | It asked a workflow caller that ran `npm` in `.github/scripts` to name `package.json`. Since Phase E the derivation's callers are `directives/*.md` alone, so no caller can be YAML; the rest of check 6 (local `require`/`import`, the CommonJS manifest) stays |
 | The inline `Validate workflow YAML` step in `qa.yml` | 2026-10-12 | It ran `yaml.safe_load` over the workflows and `templates/actions/*/action.yml`, which accepts an anchor in an `action.yml` and a merge key anywhere, both refused by GitHub |
 | `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it. Its single-page assertions were NOT retired: they moved into `check-paths.js`'s third pass — each card is an `<a>` with an `href` of the shape `docs/site/<filename>.html`, closed by `</a>`, the root page has at least one card, and every target is a tracked regular file; the target check widened to every same-site link in every tracked `.html` page, read by a spec tokenizer and resolved as a browser would (Codex on #415). Only the sync half (count, order, attributes, content across two pages) went |
 

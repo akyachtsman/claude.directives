@@ -70,15 +70,15 @@ form-independent scan, these ways:
      comment: reworded, both dropped out of the derivation with no error. So the
      dependencies are derived from the files that CREATE them, never from a
      hand-list here: a local `require`/`import` in the template source of a
-     script the caller names (followed transitively), `npm install|ci` run
-     with `.github/scripts` as its directory (needs package.json), and a
-     CommonJS script, which runs only under package.json's
-     `"type": "commonjs"` (needs it too; pilots, 2026-10-13). Each must be
-     in the install derivation over THAT caller, or this fails. Chosen over
-     moving the names out of the comment: any spot in the YAML is just as
-     rewordable, while a dependency read from the `require` line and the npm
-     step moves when they move -- the guard follows the facts, not a list
-     someone has to remember to update.
+     script the caller names (followed transitively), and a CommonJS script,
+     which runs only under package.json's `"type": "commonjs"` (needs it;
+     pilots, 2026-10-13). Each must be in the install derivation over THAT
+     caller, or this fails. Chosen over moving the names out of the comment:
+     any spot in a caller is just as rewordable, while a dependency read from
+     the `require` line moves when it moves -- the guard follows the facts,
+     not a list someone has to remember to update. (It also read `npm` run in
+     .github/scripts out of workflow YAML; that reader went in #460 step 5,
+     when no caller could be YAML any more.)
 
 WHY grep AND NOT `re`. An earlier version compiled the extracted patterns with
 Python's `re` and matched with Python. The shipped pipeline runs GNU `grep -E`,
@@ -100,9 +100,8 @@ this guard would report green. It pins the derivation against invocation-FORM
 drift, which is the failure that actually happened; it does not prove the
 derivation finds every script a caller could conceivably need. Check 6 reads
 only the dependency shapes it names: a literal relative `require`/`import`, a
-sibling Python `import`, and npm run in `.github/scripts` by `working-directory`
-(step, job or workflow `defaults`), `cd`, or `--prefix`. A computed `require`
-path or a dependency loaded any other way is invisible to it.
+sibling Python `import`, and a CommonJS script's need for package.json. A
+computed `require` path or a dependency loaded any other way is invisible to it.
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -116,25 +115,15 @@ path or a dependency loaded any other way is invisible to it.
 #   out of it; the guard reads the shipped pattern out of the command rather
 #   than copying it, PROP6 2026-09-01;
 
-# Before any import: running the gate must leave no __pycache__/ beside the
-# local modules it imports (cases_lib.py and/or gh_yaml.py).
 import sys
-sys.dont_write_bytecode = True
-
 import ast
 import json
 import os
 import posixpath
 import re
-import shlex
 import subprocess
 from pathlib import Path
 
-import yaml
-
-# The shared YAML 1.2 reader (.github/scripts/gh_yaml.py), found from this
-# file, not the cwd, which the cases point at a fixture tree (I-24).
-import gh_yaml  # noqa: E402
 
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")
 # /new-repo installs callers too, from a project with no templates/ of its own,
@@ -155,11 +144,11 @@ DERIVE = Path("plugins/directives-toolkit/scripts/derive-scripts.sh")
 # Phase E of #460 step 4 (owner ruling, 2026-10-26): the workflow templates are
 # callers of the shared workflows, and a refresh installs no workflow or
 # composite, so the directives are the whole caller set -- the derivation runs
-# over directives/*.md alone (refresh-repo.md and new-repo.md). The readers for
-# workflow and composite callers (check 6's npm and YAML parts) stay, and the
-# cases still drive them: check-refresh-derivation-cases.py sets
-# DERIVATION_CALLER_GLOBS to the globs its fixtures use. Only a run with that
-# variable reads anything but the directives.
+# over directives/*.md alone (refresh-repo.md and new-repo.md). Step 5 of #460
+# removed check 6's YAML and npm reader, which only a workflow caller needed;
+# every check now reads a caller as plain text. check-refresh-derivation-cases.py
+# still sets DERIVATION_CALLER_GLOBS to the globs its fixtures use, and only a
+# run with that variable reads anything but the directives.
 CALLER_GLOBS = tuple(os.environ.get("DERIVATION_CALLER_GLOBS", "directives/*.md").split())
 
 # An INLINE copy of the token grep, in either caller. Check 4 refuses one: the
@@ -337,70 +326,6 @@ def js_local_requests(src):
         if spec and re.match(r"^\.{1,2}/", spec):
             out[spec] = how
     return out
-
-
-_ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/)?"""
-SCRIPTS_DIR = re.compile(rf"^{_ROOT}\.github/scripts/?$")
-SEGMENT = re.compile(r"\n|&&|\|\||;|\|")
-
-
-def npm_reads_scripts_pkg(run, wd):
-    """True when a command in `run` is ANY npm invocation with .github/scripts as
-    its directory -- the step's working-directory, a `cd` earlier in the block,
-    or `--prefix`. Read as TOKENS, not a regex over the line: npm takes config
-    options anywhere, so `npm --silent install` and `npm --prefix X ci` are the
-    same command (Codex, #411 rounds 1 and 3). No subcommand list: install, ci,
-    cit, it, test, run and their aliases all read the project manifest, and a
-    list was one more review round per alias it missed (round 4). Over-reading
-    (`npm --version` there) only asks that package.json be named, which a
-    directory npm runs in is expected to ship anyway. Not read, by design: NPM_CONFIG_PREFIX in `env:`, `pushd`, a
-    subshell `(cd X; npm ci)`, a relative `cd` chain -- none occurs in a
-    shipped caller; add a form here when one does."""
-    def unexpr(text):   # the expression form tokenises badly; name it as bash does
-        return re.sub(r"\$\{\{\s*github\.workspace\s*\}\}", "$GITHUB_WORKSPACE", text)
-    run = unexpr(run)
-    cwd = unexpr(wd) if isinstance(wd, str) else None
-    for seg in SEGMENT.split(run):
-        try:
-            toks = shlex.split(seg, comments=True)
-        except ValueError:
-            toks = seg.split()
-        while toks and re.match(r"^[A-Za-z_]\w*=", toks[0]):   # VAR=x npm ci
-            toks = toks[1:]
-        if not toks:
-            continue
-        if toks[0] == "cd" and len(toks) > 1:
-            cwd = toks[1]
-            continue
-        if toks[0] != "npm":
-            continue
-        args, target = toks[1:], cwd
-        for i, arg in enumerate(args):
-            if arg == "--prefix" and i + 1 < len(args):
-                target = args[i + 1]
-            elif arg.startswith("--prefix="):
-                target = arg.split("=", 1)[1]
-        if isinstance(target, str) and SCRIPTS_DIR.match(target.strip()):
-            return True
-    return False
-
-
-def npm_in_scripts(doc):
-    """True when some step runs npm install/ci with .github/scripts as its
-    directory -- `npm install` there reads .github/scripts/package.json."""
-    def walk(node, wd):
-        if isinstance(node, dict):
-            d = node.get("defaults")
-            if isinstance(d, dict) and isinstance(d.get("run"), dict):
-                wd = d["run"].get("working-directory", wd)
-            run = node.get("run")
-            if isinstance(run, str) and npm_reads_scripts_pkg(run, node.get("working-directory", wd)):
-                return True
-            return any(walk(v, wd) for v in node.values())
-        if isinstance(node, list):
-            return any(walk(v, wd) for v in node)
-        return False
-    return walk(doc, None)
 
 
 # Node's documented algorithm for a relative require (nodejs.org/api/modules.html,
@@ -582,18 +507,11 @@ def commonjs_manifest(script):
             '"type": "commonjs" when the project root says "type": "module"')
 
 
-def needs(caller, body, named):
+def needs(named):
     """{dependency: reason} for everything `caller` needs that the install must
     derive. `named` is what the derivation found in it; local loads are
     followed transitively from there."""
     need = {}
-    if caller.suffix in (".yml", ".yaml"):
-        try:
-            doc = gh_yaml.load(body)
-        except yaml.YAMLError as e:
-            raise ValueError(f"{caller} is not readable YAML ({e.__class__.__name__})")
-        if npm_in_scripts(doc):
-            need[PACKAGE_JSON] = "read by `npm install` run in .github/scripts"
     todo, seen = sorted(named), set()
     while todo:
         script = todo.pop()
@@ -805,7 +723,7 @@ def main():
     for caller in callers:
         named = named_by[caller]
         try:
-            need = needs(caller, bodies[caller], named)
+            need = needs(named)
         except ValueError as e:
             return fail(f"cannot derive what a caller needs: {e}. A caller this guard\n"
                         "      cannot read is not one it can pass.")

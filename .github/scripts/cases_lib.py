@@ -27,7 +27,7 @@ def run(argv, **kwargs):
 
     Decoded LENIENTLY: a guard that prints a path holding a byte that is not
     valid UTF-8 must reach the suite as a verdict, not as a UnicodeDecodeError
-    raised by the harness (check-action-siblings-cases.py, #354).
+    raised by the harness (the action-siblings cases, #354, retired in #460 step 5).
     """
     proc = subprocess.run([str(a) for a in argv], capture_output=True, **kwargs)
     decode = lambda b: b.decode("utf-8", "surrogateescape")

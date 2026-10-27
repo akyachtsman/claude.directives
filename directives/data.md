@@ -146,7 +146,8 @@ project applies part 1 in its first migration.
    ```
    On Postgres 17 or later, add `MAINTAIN` to both lists; older versions reject
    the word. The migration contains `TRUNCATE`, so from a project thread it goes
-   through the SQL Editor (*MCP Configuration* above). The check returns no rows when it holds:
+   through the SQL Editor (*MCP Configuration* above). The first check returns
+   no rows when existing tables hold:
    ```sql
    SELECT c.oid::regclass AS object, r.role, p.priv
    FROM pg_class c
@@ -155,6 +156,18 @@ project applies part 1 in its first migration.
    WHERE c.relnamespace = 'public'::regnamespace
      AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
      AND has_table_privilege(r.role, c.oid, p.priv);
+   ```
+   That query sees only tables that exist, so a missed `ALTER DEFAULT
+   PRIVILEGES` passes it until the next table arrives. The second check reads
+   the defaults themselves and must return no rows too:
+   ```sql
+   SELECT a.grantee::regrole AS role, a.privilege_type
+   FROM pg_default_acl d, aclexplode(d.defaclacl) a
+   WHERE d.defaclrole = 'postgres'::regrole
+     AND d.defaclnamespace = 'public'::regnamespace
+     AND d.defaclobjtype = 'r'
+     AND a.grantee IN ('anon'::regrole, 'authenticated'::regrole)
+     AND a.privilege_type IN ('TRUNCATE', 'REFERENCES', 'TRIGGER');
    ```
 2. **Record pg_net's queue as an accepted risk, with the rules that keep it
    safe.** pg_net's `net.http_request_queue` holds each queued request's headers

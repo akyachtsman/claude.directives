@@ -84,17 +84,26 @@ fi
 # trailing `/`, either as installed (`<kit dir>/tests/lib/`, that kit only) or
 # as shipped (`templates/ui-tests/tests/lib/`, every kit), and binds to the
 # directory's git TREE id at the head, the directory's counterpart of a file's
-# blob: any change under it re-asks. The kit ROOT is never a key: declining the
+# blob: any change under it re-asks. AND to the installed directory's own tree
+# (`local`, refresh-lib.sh -> refresh_local_tree; `absent` when it holds no
+# file), the counterpart of a file record's `local`: an edit under a declined
+# directory re-asks too. A record without `local` binds nothing (claude.insurance,
+# #460's batch list). The kit ROOT is never a key: declining the
 # whole kit in one line is the wholesale skip the per-file row exists to stop.
 kit_dir_kept() {
-  local rel d tr why
+  local rel d tr lt why
   rel=${2#templates/ui-tests/}
   d=$(dirname -- "$rel")
   while [ "$d" != . ] && [ "$d" != / ]; do
     tr=$(git -C "$up" rev-parse "$head:templates/ui-tests/$d" 2>/dev/null) || tr=
-    if [ -n "$tr" ]; then
-      why=$(jq -r --arg lk "$1/$d/" --arg tk "templates/ui-tests/$d/" --arg t "$tr" \
-        '[.refresh_kept[$lk], .refresh_kept[$tk]] | map(select(type == "object" and .tree == $t))
+    # The local tree is measured only when a record names this upstream tree.
+    if [ -n "$tr" ] && jq -e --arg lk "$1/$d/" --arg tk "templates/ui-tests/$d/" --arg t "$tr" \
+         'any(.refresh_kept[$lk], .refresh_kept[$tk]; type == "object" and .tree == $t)' \
+         .claude/directive-sync.json >/dev/null 2>&1 \
+       && lt=$(refresh_local_tree "$(refresh_kit_join "$1" "$d")"); then
+      why=$(jq -r --arg lk "$1/$d/" --arg tk "templates/ui-tests/$d/" --arg t "$tr" --arg l "$lt" \
+        '[.refresh_kept[$lk], .refresh_kept[$tk]]
+         | map(select(type == "object" and .tree == $t and .local == $l and $l != ""))
          | .[0].reason // empty | select(type == "string" and test("\\S"))
          | if length > 60 then .[0:60] + "..." else . end' \
         .claude/directive-sync.json 2>/dev/null) || why=
@@ -178,12 +187,16 @@ check() {
   # A kit file below the kit root: name the one-step decline for its directory,
   # once per directory.
   if [ -n "${4:-}" ] && [ "$b" != deleted ]; then
-    local d tr
+    local d tr lt
     d=$(dirname -- "${2#templates/ui-tests/}")
     case "$dir_hints" in *" $4/$d/ "*) return ;; esac
     if [ "$d" != . ] && tr=$(git -C "$up" rev-parse "$head:templates/ui-tests/$d" 2>/dev/null); then
       dir_hints="$dir_hints$4/$d/ "
-      echo "  (to decline all of $4/$d/ at once: one refresh_kept entry keyed \"$4/$d/\" with tree $tr)"
+      if lt=$(refresh_local_tree "$(refresh_kit_join "$4" "$d")"); then
+        echo "  (to decline all of $4/$d/ at once: one refresh_kept entry keyed \"$4/$d/\" with tree $tr and local $lt)"
+      else
+        echo "  (to decline all of $4/$d/ at once: one refresh_kept entry keyed \"$4/$d/\" with tree $tr -- its local tree could not be measured)"
+      fi
     fi
   fi
 }

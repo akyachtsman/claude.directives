@@ -124,7 +124,7 @@ const PLACE = {
     `${P}/skills/doc-comp/`],
   pr: [`${P}/commands/commit-chk.md`, `${P}/agents/pr-readiness-reviewer.md`,
     'templates/pr-checklist.md', 'templates/workflows/qa.yml', '.github/workflows/shared-qa.yml', 'templates/workflows/qa-response.yml', '.github/workflows/shared-qa-response.yml',
-    'templates/workflows/qa-live.yml', '.github/workflows/shared-qa-live.yml', 'templates/ui-tests/', 'templates/actions/secret-scan/', 'templates/actions/ui-suite/',
+    'templates/workflows/qa-live.yml', '.github/workflows/shared-qa-live.yml', 'templates/ui-tests/', 'templates/actions/secret-scan/', 'templates/actions/web-guards/', 'templates/actions/ui-suite/',
     'templates/scripts/check-contrast.js', 'docs/standards/contrast-guardrail.md', 'templates/scripts/check-ui-viewports.js',
     'docs/standards/viewport-classes-history.md',
     'docs/standards/pr-mechanics.md', 'docs/standards/code-review-standard.md',
@@ -198,6 +198,7 @@ const ALIASES = {
   // "`templates/actions/<a>/**` → `.github/actions/<a>/**`", which names each.
   'templates/actions/secret-scan/': ['templates/actions/<a>/'],
   'templates/actions/ui-suite/': ['templates/actions/<a>/'],
+  'templates/actions/web-guards/': ['templates/actions/<a>/'],
 };
 const GENERIC = new Set(['package.json', 'SKILL.md', 'hooks.json', 'README.md', 'index.html', 'action.yml']);
 
@@ -371,6 +372,7 @@ const FLOW = [
   ['self:ci', 'plugin.json', 'val', 'validates', 'a', 'JSON.parse(readFileSync'],
   ['self:ci', 'shared-qa.yml', 'val', 'self-tests against a fixture site', 'a', 'uses: ./.github/workflows/shared-qa.yml'],
   ['shared-qa.yml', 'secret-scan', 'run', 'runs at the called commit', 'a', 'uses: ./.claude-directives/templates/actions/secret-scan'],
+  ['shared-qa.yml', 'web-guards', 'run', 'runs at the called commit', 'a', 'uses: ./.claude-directives/templates/actions/web-guards'],
   ['shared-qa.yml', 'ui-suite', 'run', 'runs at the called commit', 'a', 'uses: ./.claude-directives/templates/actions/ui-suite'],
   ['shared-qa.yml', 'check-contrast.js', 'run', 'runs at the called commit', 'a', 'shared=.claude-directives/templates/scripts/check-contrast.js'],
   ['shared-qa.yml', 'check-ui-viewports.js', 'run', 'stages for the ui-suite', 'a', 'for f in check-ui-viewports.js'],

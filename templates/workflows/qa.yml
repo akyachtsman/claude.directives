@@ -15,6 +15,12 @@
 #     is served.
 #   - contrast-script: a project that added pairs to its own copy of
 #     check-contrast.js names that copy; without it the shipped pairs run.
+#   - The web guards (native dialogs, escaped text in a text sink, npm
+#     audit) run in Static Checks by default. guard-skip names a file a code
+#     guard leaves alone (a vendored library), audit-skip a tree the audit
+#     leaves out, text-sinks the project's own dialog functions; each guard
+#     has an off switch for a finding being fixed. docs/standards/cicd-setup.md
+#     -> Step 2.
 #   - TEST_AUTH_CREDENTIAL / TEST_AUTH_EMAIL repository secrets: set them only
 #     for a login that needs a credential from outside. Which gates need which,
 #     and when to leave both unset: docs/standards/cicd-setup.md -> Step 5.

@@ -7,8 +7,9 @@
 # Releases.
 #
 # Jobs:
-#   static-checks — the secret-scan composite and the contrast guardrail; the
-#                   blocking gate.
+#   static-checks — the secret-scan composite, the contrast guardrail and the
+#                   web-guards composite (native dialogs, escaped text in a
+#                   text sink, npm audit); the blocking gate.
 #   ui-tests      — Playwright against a local server through the ui-suite
 #                   composite (skipped with a notice only while the repo has
 #                   no index.html yet and no build). BLOCKING by default for
@@ -87,6 +88,34 @@ on:
         description: Exported to the UI job as GREP_INVERT, for a project whose playwright.config.js reads it into grepInvert to leave tests out of the PR run (claude.trading's `live only`). Empty by default. The shared kit does not read it.
         type: string
         default: ''
+      native-dialog-guard:
+        description: true fails a call to the browser's own confirm(), alert() or prompt() in the site's code (design.md -> 9. Confirmations). false turns the guard off.
+        type: boolean
+        default: true
+      escape-sink-guard:
+        description: true fails an HTML-escaped value in a text sink (textContent, .value, setAttribute('title'), a dialog), where the person reads the entity codes. false turns the guard off.
+        type: boolean
+        default: true
+      audit-deps:
+        description: true runs `npm audit` on every npm dependency tree in the repository and fails at audit-level or above. false turns the audit off.
+        type: boolean
+        default: true
+      guard-skip:
+        description: Files or directories (from the repo root) the native-dialog and escape-sink guards leave alone, one per line; prefix `native-dialog:` or `escape-sink:` for one guard only. An entry naming nothing fails.
+        type: string
+        default: ''
+      text-sinks:
+        description: Names of the project's own functions whose arguments are shown as plain text (its own dialog, say), for the escape-sink guard. The house dialogs are included already.
+        type: string
+        default: ''
+      audit-level:
+        description: The lowest npm advisory severity that fails the audit (low, moderate, high, critical).
+        type: string
+        default: high
+      audit-skip:
+        description: Manifests the audit leaves out (a directory or its package.json), one per line. An entry naming nothing fails.
+        type: string
+        default: ''
       ui-timeout-minutes:
         description: The UI job's bound. 120 is the fleet floor for a ui-suite caller; raise it, never lower it.
         type: number
@@ -109,7 +138,9 @@ jobs:
   static-checks:
     name: Static Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 10, not 5, since the web guards: an npm install and one `npm audit` per
+    # dependency tree, each a registry round trip.
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -185,6 +216,27 @@ jobs:
             echo "::warning::$local_copy differs from the shared copy, and this run checks only the shared pairs. If it adds pairs of its own, pass contrast-script: $local_copy."
           fi
           node "$shared" "${args[@]}"
+
+      # Three guards from apfp.claude's CI, for every project (owner ruling,
+      # 2026-10-27): no native confirm/alert/prompt, no HTML-escaped value in a
+      # text sink, and `npm audit` of every dependency tree. Each has its own
+      # off switch and the code guards a per-file skip list; what each reads and
+      # why is in its script's header (templates/actions/web-guards/). With the
+      # CI-build opt-in, site-dir is the build's OUTPUT and does not exist yet
+      # in this job, so the code guards read the repository's own source.
+      # Runs after a red contrast step too, so one run names every finding.
+      - name: Web guards
+        if: ${{ !cancelled() }}
+        uses: ./.claude-directives/templates/actions/web-guards
+        with:
+          site-dir: ${{ inputs.build-cmd == '' && inputs.site-dir || '.' }}
+          native-dialog: ${{ inputs.native-dialog-guard }}
+          escape-sink: ${{ inputs.escape-sink-guard }}
+          audit-deps: ${{ inputs.audit-deps }}
+          guard-skip: ${{ inputs.guard-skip }}
+          text-sinks: ${{ inputs.text-sinks }}
+          audit-level: ${{ inputs.audit-level }}
+          audit-skip: ${{ inputs.audit-skip }}
 
   ui-tests:
     name: UI Tests (local server)

@@ -50,7 +50,9 @@ const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const lock = fs.existsSync('package-lock.json') ? JSON.parse(fs.readFileSync('package-lock.json', 'utf8')) : {};
 const locked = Object.keys(lock.packages || {}).filter(k => k.startsWith('node_modules/')).map(k => k.slice('node_modules/'.length));
 const names = [...new Set([...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }), ...locked])];
+const npmrc = fs.existsSync('.npmrc') ? fs.readFileSync('.npmrc', 'utf8') : '';
 if (cmd === 'install') {
+  if (names.some(n => n.startsWith('@company/')) && !npmrc.includes('@company:registry')) { console.error('npm error 404 Not Found - @company/ui'); process.exit(1); }
   if (names.includes('unresolvable')) { console.error('npm error 404 Not Found - unresolvable'); process.exit(1); }
   fs.writeFileSync('package-lock.json', '{}'); process.exit(0);
 }
@@ -293,6 +295,8 @@ const CASES = [
   { guard: 'audit', name: 'no lockfile: what an install would resolve is audited, in scratch, not the checkout',
     files: { 'scripts/package.json': pkg({ 'bad-mailer': '1' }) }, code: 1, want: 'no lockfile: audited what an install would resolve today',
     after: root => existsSync(join(root, 'scripts', 'package-lock.json')) ? 'a lockfile was written into the checkout' : null },
+  { guard: 'audit', name: "no lockfile: the project's own .npmrc (a private registry) is used to resolve (Codex, #493)",
+    files: { 'app/package.json': pkg({ '@company/ui': '1' }), 'app/.npmrc': '@company:registry=https://npm.example.test/\n' }, code: 0, want: 'no lockfile: audited what an install would resolve today' },
   { guard: 'audit', name: "a workspace package is covered by its root's lockfile, not resolved alone",
     files: { 'package.json': pkg({ ok: '1' }, { workspaces: ['packages/*'] }), 'package-lock.json': JSON.stringify({ packages: { '': {}, 'packages/app': {} } }),
       'packages/app/package.json': pkg({ unresolvable: '1' }) }, code: 0, want: 'a workspace of package-lock.json, audited with it' },

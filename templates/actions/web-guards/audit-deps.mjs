@@ -102,6 +102,9 @@ function auditTree(manifest, level) {
     if (!DEP_KEYS.some(k => pkg[k] && Object.keys(pkg[k]).length)) return { verdict: 'none', lines: [] };
     scratch = mkdtempSync(join(tmpdir(), 'audit-deps-'));
     copyFileSync(manifest, join(scratch, 'package.json'));
+    // The project's own npm config (a private registry, its auth) travels with
+    // it: npm reads a .npmrc beside package.json as that project's (Codex, #493).
+    if (existsSync(join(dir, '.npmrc'))) copyFileSync(join(dir, '.npmrc'), join(scratch, '.npmrc'));
     const r = spawnSync(NPM, ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'],
       { cwd: scratch, encoding: 'utf8' });
     if (r.status !== 0) {

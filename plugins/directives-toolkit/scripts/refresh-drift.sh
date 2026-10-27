@@ -421,15 +421,17 @@ echo "SUMMARY: $n installed file(s) compared at $pin — $same match, $stale STA
 # Every refresh_kept FILE record whose `local` blob is missing or no longer the
 # file's, kit files included: the CUSTOM lines above reach only the files this
 # loop compares, so a kit record first surfaced as a stamp refusal (claude.prop
-# pilot, 2026-10-15). Said once, up front, with the paths. Directory records
-# (keys ending in `/`) bind a tree, not a local blob, and are not counted.
+# pilot, 2026-10-15). Said once, up front, with the paths. A kit DIRECTORY
+# record (a key ending in `/`) is counted the same way against its local tree
+# (refresh-lib.sh -> refresh_local_tree), in every kit when it is keyed as
+# shipped: the stamp binds it to both trees (#460's batch list).
 # Each key is read RAW (jq -j, one value per call), never through @tsv: @tsv
 # escapes a backslash and `read -r` keeps the escape, so a key holding one
 # hashed a path that does not exist and could never clear (Codex, #457).
 stale_recs=
 nrec=0
 recs=$(jq -c '[.refresh_kept | if type == "object" then to_entries[] else empty end
-               | select((.key | endswith("/") | not) and (.value | type == "object"))
+               | select(.value | type == "object")
                | {k: .key, l: (.value.local // "" | tostring)}]' \
   .claude/directive-sync.json 2>/dev/null) || recs='[]'
 nk=$(printf '%s' "$recs" | jq 'length' 2>/dev/null) || nk=0
@@ -441,13 +443,29 @@ while [ "$i" -lt "${nk:-0}" ]; do
   l=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].l')
   i=$((i + 1))
   [ -n "$k" ] || continue
-  if [ -e "$k" ]; then cur=$(git hash-object --no-filters -- "$k" 2>/dev/null) || cur=; else cur=absent; fi
-  if [ -z "$l" ] || [ "$l" != "$cur" ]; then
+  stale=no
+  case "$k" in
+    templates/ui-tests/?*/)   # as shipped: every kit's copy of the directory
+      while IFS= read -r kd; do
+        [ -n "$kd" ] || continue
+        rel=${k#templates/ui-tests/}
+        cur=$(refresh_local_tree "$(refresh_kit_join "$kd" "${rel%/}")") || cur=
+        [ -n "$l" ] && [ "$l" = "$cur" ] || stale=yes
+      done <<KITS
+${kit_dirs:-.github/scripts/ui-tests}
+KITS
+      ;;
+    */) cur=$(refresh_local_tree "${k%/}") || cur=
+        [ -n "$l" ] && [ "$l" = "$cur" ] || stale=yes ;;
+    *) if [ -e "$k" ]; then cur=$(git hash-object --no-filters -- "$k" 2>/dev/null) || cur=; else cur=absent; fi
+       [ -n "$l" ] && [ "$l" = "$cur" ] || stale=yes ;;
+  esac
+  if [ "$stale" = yes ]; then
     stale_recs="$stale_recs${stale_recs:+, }$k"
     nrec=$((nrec + 1))
   fi
 done
 if [ "$nrec" -gt 0 ]; then
-  echo "RE-RECORD: $nrec refresh_kept file record(s) bind no current local content, kit files included -- the stamp refuses each whose file still differs from its template until it is re-recorded with its local blob (or dropped): $stale_recs"
+  echo "RE-RECORD: $nrec refresh_kept record(s) bind no current local content, kit files and directories included -- the stamp refuses each whose file still differs from its template until it is re-recorded with its local blob, or a directory's local tree (or dropped): $stale_recs"
 fi
 exit 0

@@ -179,6 +179,21 @@ Round 4 (claude.prop pilot, 2026-10-15): the line of a record that BINDS --
 drift's CUSTOM, the stamp's KEPT, file and kit-directory forms -- is cut to 60
 characters too. MEASURED against bde28c9: the drift fails the binding-cut
 case, the stamp both KEPT cases.
+KIT-DIRECTORY LOCAL TREE (claude.insurance; #460's batch list, 2026-10-27). A
+kit-directory record bound the upstream tree alone, so a declined tests/lib/
+the project went on editing was never asked about again. It now binds the
+installed directory's tree too (`local`, refresh-lib.sh -> refresh_local_tree,
+`absent` when it holds no file); the refusal prints it, and drift's RE-RECORD
+counts a directory record whose `local` is stale. MEASURED against the scripts
+at f874ead, each swapped in alone: REFRESH_STAMP_BIN -> 5 (the hint's local,
+the no-local record, the edit, the new local printed, the untracked addition);
+REFRESH_DRIFT_BIN -> 5 (the three counting RE-RECORD cases, the names, and the
+drift-kept count, whose wording changed).
+SAME-DAY NO-CHANGE STAMP (claude.prop; #460's batch list). On the day the sha
+was stamped, a rewrite is byte-identical too, so the no-delta case also checks
+the inode and mtime. MEASURED: the new stamp with its unchanged branch made to
+rewrite the file through a temp and mv fails only the byte-identical case (the
+fixture's `synced` is an older date) and the same-day inode/mtime case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -614,6 +629,24 @@ expect("stamp: at a head already stamped it says so and exits 0",
        res, 0, f"stamped: {H} (unchanged; file not rewritten)")
 check("stamp: ...and leaves .claude/directive-sync.json byte-identical",
       (r / ".claude/directive-sync.json").read_bytes() == before, (r / ".claude/directive-sync.json").read_text())
+# On the day the sha was stamped, a rewrite is byte-identical too (`synced` is
+# already today), so bytes cannot tell "not rewritten" from "rewritten the
+# same": the file must be the same inode with the same mtime (claude.prop;
+# #460's batch list).
+r = project("stamp-unchanged-same-day", stamp=H)
+p = r / ".claude/directive-sync.json"
+d = json.loads(p.read_text())
+d["upstream"]["synced"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+p.write_text(json.dumps(d, indent=2) + "\n")
+os.utime(p, ns=(1_000_000_000, 1_000_000_000))
+st = p.stat()
+run(r, "refresh-delta.sh")
+expect("stamp: a same-day run at a head already stamped says unchanged",
+       run(r, "refresh-stamp.sh"), 0, f"stamped: {H} (unchanged; file not rewritten)")
+st2 = p.stat()
+check("stamp: ...and leaves the file untouched: same inode, same mtime",
+      (st2.st_ino, st2.st_mtime_ns) == (st.st_ino, st.st_mtime_ns),
+      f"inode {st.st_ino} -> {st2.st_ino}, mtime_ns {st.st_mtime_ns} -> {st2.st_mtime_ns}")
 check("stamp: ...and still consumes the verdict",
       not any(marker(r, n).exists() for n in ("classified", "base", "delta")), "a marker survived")
 expect("stamp: with the verdict consumed, a third run refuses as NOT classified",
@@ -667,7 +700,7 @@ r = project("kitdir-hint", changes=LIB_GONE)
 run(r, "refresh-delta.sh")
 expect("stamp: absent kit lib files are refused, with the one-step decline named",
        run(r, "refresh-stamp.sh"), 1,
-       f"one refresh_kept entry keyed \".github/scripts/ui-tests/tests/lib/\" with tree {LIB_TREE}")
+       f"one refresh_kept entry keyed \".github/scripts/ui-tests/tests/lib/\" with tree {LIB_TREE} and local absent")
 # A required file not installed records `local` as `absent`, which the refusal
 # prints (Codex, #451).
 r = project("absent-kept", changes=LIB_GONE, sync_extra={"refresh_kept": {
@@ -684,7 +717,8 @@ expect("stamp: a record with local absent covers a required file not installed",
 for label, key in (("as installed", ".github/scripts/ui-tests/tests/lib/"),
                    ("as shipped", "templates/ui-tests/tests/lib/")):
     r = project(f"kitdir-{label.split()[1]}", changes=LIB_GONE,
-                sync_extra={"refresh_kept": {key: {"tree": LIB_TREE, "reason": "helpers stay inline in app.spec.js"}}})
+                sync_extra={"refresh_kept": {key: {"tree": LIB_TREE, "local": "absent",
+                                                   "reason": "helpers stay inline in app.spec.js"}}})
     run(r, "refresh-delta.sh")
     expect(f"stamp: ONE kit-directory entry keyed {label} covers every file under it",
            run(r, "refresh-stamp.sh"), 0, "(directory tests/lib/) helpers stay inline")
@@ -699,22 +733,52 @@ run(r, "refresh-delta.sh")
 expect("stamp: a file record's KEPT line quotes its reason cut to 60 characters (claude.prop pilot, 2026-10-15)",
        run(r, "refresh-stamp.sh"), 1, f"KEPT: .github/scripts/ui-tests/tests/lib/fixtures.js -- {'f' * 60}...", absent="f" * 61)
 r = project("kitdir-long", changes=LIB_GONE,
-            sync_extra={"refresh_kept": {".github/scripts/ui-tests/tests/lib/": {"tree": LIB_TREE, "reason": "d" * 100}}})
+            sync_extra={"refresh_kept": {".github/scripts/ui-tests/tests/lib/": {
+                "tree": LIB_TREE, "local": "absent", "reason": "d" * 100}}})
 run(r, "refresh-delta.sh")
 expect("stamp: a kit-directory record's KEPT line is cut the same way",
        run(r, "refresh-stamp.sh"), 0, f"(directory tests/lib/) {'d' * 60}...", absent="d" * 61)
 r = project("kitdir-stale-tree", changes=LIB_GONE,
             sync_extra={"refresh_kept": {".github/scripts/ui-tests/tests/lib/": {
-                "tree": tree_id(S, "templates/ui-tests/tests/lib"), "reason": "old"}}})
+                "tree": tree_id(S, "templates/ui-tests/tests/lib"), "local": "absent", "reason": "old"}}})
 run(r, "refresh-delta.sh")
 expect("stamp: a kit-directory entry bound to an OLD tree no longer covers it",
        run(r, "refresh-stamp.sh"), 1, "tests/lib/fixtures.js is absent but required")
 r = project("kitdir-root", changes=LIB_GONE,
             sync_extra={"refresh_kept": {".github/scripts/ui-tests/": {
-                "tree": tree_id(H, "templates/ui-tests"), "reason": "the whole kit"}}})
+                "tree": tree_id(H, "templates/ui-tests"), "local": "absent", "reason": "the whole kit"}}})
 run(r, "refresh-delta.sh")
 expect("stamp: the kit ROOT is never a one-step decline",
        run(r, "refresh-stamp.sh"), 1, "tests/lib/auth.js is absent but required")
+# A directory record binds the installed directory's own tree too (`local`),
+# as a file record binds its blob: bound to the upstream tree alone, a
+# declined tests/lib/ that the project went on editing was never asked about
+# again (claude.insurance; #460's batch list).
+r = project("kitdir-no-local", changes=LIB_GONE, sync_extra={"refresh_kept": {
+    ".github/scripts/ui-tests/tests/lib/": {"tree": LIB_TREE, "reason": "helpers inline"}}})
+run(r, "refresh-delta.sh")
+expect("stamp: a kit-directory record without `local` binds nothing, and the refusal prints the local tree to record",
+       run(r, "refresh-stamp.sh"), 1, f"with tree {LIB_TREE} and local absent", absent="KEPT:")
+LIB_OWN = {".github/scripts/ui-tests/tests/lib/fixtures.js": "// fixtures, the project's own\n"}
+r = project("kitdir-edited", changes=LIB_OWN)
+own_tree = git(r, "rev-parse", "HEAD:.github/scripts/ui-tests/tests/lib")
+set_kept(r, ".github/scripts/ui-tests/tests/lib/",
+         {"tree": LIB_TREE, "local": own_tree, "reason": "the project's own helpers"})
+run(r, "refresh-delta.sh")
+expect("stamp: a record bound to the directory as installed covers it (its local tree is git's tree id)",
+       run(r, "refresh-stamp.sh"), 0, "(directory tests/lib/) the project's own helpers")
+(r / ".github/scripts/ui-tests/tests/lib/auth.js").write_text("// auth, edited since\n", encoding="utf-8")
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-stamp.sh")
+expect("stamp: an edit under a declined directory re-asks",
+       res, 1, "UNAPPLIED: .github/scripts/ui-tests/tests/lib/auth.js differs", absent="KEPT:")
+check("stamp: ...and the refusal prints the new local tree",
+      re.search(r"with tree " + LIB_TREE + r" and local (?!" + own_tree + r")[0-9a-f]{40}\)", res[1]) is not None, res[1])
+(r / ".github/scripts/ui-tests/tests/lib/auth.js").write_text(S_FILES["templates/ui-tests/tests/lib/auth.js"], encoding="utf-8")
+(r / ".github/scripts/ui-tests/tests/lib/extra.js").write_text("// an untracked addition\n", encoding="utf-8")
+run(r, "refresh-delta.sh")
+expect("stamp: an untracked file added under a declined directory re-asks too",
+       run(r, "refresh-stamp.sh"), 1, "tests/lib/fixtures.js differs", absent="KEPT:")
 
 # ---- items 5-7: drift at the pin, STALE vs CUSTOM, modes ----------------------
 # At the stamp, guard.py and ladder.js are the stamp-era templates (STALE once
@@ -899,9 +963,9 @@ for i, why in enumerate(("", "  \n", None)):
 # claude.prop pilot, 2026-10-15: a warning line quoted a ~800-character reason
 # whole, and drift never mentioned the kit's records -- they first surfaced as
 # stamp refusals. The warning quotes 60 characters; one RE-RECORD line after
-# SUMMARY counts and names every FILE record whose `local` is missing or stale,
-# kit files included; a record whose `local` matches, and a directory record,
-# are not counted.
+# SUMMARY counts and names every record whose `local` is missing or stale,
+# kit files and kit directories included (a directory's `local` is its tree,
+# #460's batch list); a record whose `local` matches is not counted.
 LONG = "x" * 100
 ODD_PATH, ODD_TEXT = "ui\\tests/kept.js", "// kept under a backslash\n"
 NL_PATH = "nl-kept\n"
@@ -917,7 +981,9 @@ r = project("drift-rerecord", at=S_FILES, changes={
     ".github/scripts/ui-tests/tests/app.spec.js": {
         "blob": blob_id(H, "templates/ui-tests/tests/app.spec.js"),
         "local": obj_id(S_FILES["templates/ui-tests/tests/app.spec.js"]), "reason": "bound"},
-    ".github/scripts/ui-tests/tests/lib/": {"tree": LIB_TREE, "reason": "helpers inline"},
+    ".github/scripts/ui-tests/tests/lib/": {"tree": LIB_TREE, "local": tree_id(S, "templates/ui-tests/tests/lib"),
+                                            "reason": "helpers inline"},
+    "templates/ui-tests/tests/": {"tree": tree_id(H, "templates/ui-tests/tests"), "reason": "no local tree"},
     ODD_PATH: {"blob": "0" * 40, "local": obj_id(ODD_TEXT), "reason": "bound, under a backslash"},
     NL_PATH: {"blob": "0" * 40, "local": obj_id(ODD_TEXT), "reason": "bound, name ends in a newline"},
 }})
@@ -925,18 +991,20 @@ run(r, "refresh-delta.sh")
 res = run(r, "refresh-drift.sh")
 expect("drift: a warning line quotes the reason cut to 60 characters (claude.prop pilot, 2026-10-15)",
        res, 0, f'refresh_kept says "{"x" * 60}...", but the record binds no local content', absent="x" * 61)
-expect("drift: RE-RECORD counts and names every file record lacking a current local blob, kit files included",
-       res, 0, "(or dropped): .github/scripts/check-contrast.js, .github/scripts/ui-tests/playwright.config.js")
+expect("drift: RE-RECORD counts and names every record lacking current local content, kit files and directories included",
+       res, 0, "(or dropped): .github/scripts/check-contrast.js, .github/scripts/ui-tests/playwright.config.js, templates/ui-tests/tests/")
 expect("drift: ...and says how many",
-       res, 0, "RE-RECORD: 2 refresh_kept file record(s) bind no current local content")
-expect("drift: a record whose local blob matches, and a directory record, are not counted",
+       res, 0, "RE-RECORD: 3 refresh_kept record(s) bind no current local content")
+expect("drift: a record whose local blob matches is not counted",
        res, 0, "RE-RECORD:", absent="app.spec.js")
+expect("drift: a directory record whose local tree matches is not counted (#460's batch list)",
+       res, 0, "RE-RECORD:", absent="ui-tests/tests/lib/")
 expect("drift: a key holding a backslash is hashed at its real path, so a matching record is not counted (Codex, #457)",
-       res, 0, "RE-RECORD: 2 ", absent="kept.js")
+       res, 0, "RE-RECORD: 3 ", absent="kept.js")
 expect("drift: a key ending in a newline is hashed at its real path, so a matching record is not counted (Codex, #457)",
-       res, 0, "RE-RECORD: 2 ", absent="nl-kept")
+       res, 0, "RE-RECORD: 3 ", absent="nl-kept")
 expect("drift: the three stale records of the drift-kept project are named up front",
-       DRIFT_KEPT, 0, "RE-RECORD: 3 refresh_kept file record(s)")
+       DRIFT_KEPT, 0, "RE-RECORD: 3 refresh_kept record(s)")
 
 # A watcher upstream retired (2026-10-16, #460) is a removal finding, never a
 # project-specific file to keep: drift names it RETIRED.

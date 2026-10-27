@@ -147,3 +147,36 @@ refresh_local_mode() {
     *) if [ -x "$1" ]; then echo 100755; else echo 100644; fi ;;
   esac
 }
+
+# refresh_local_tree <dir>: the git tree id of what is on disk under <dir> --
+# every tracked or untracked, not ignored file, at its bytes (--no-filters) and
+# its refresh_local_mode -- or `absent` when it holds no file. A refresh_kept
+# record for a kit DIRECTORY binds this beside the upstream `tree`, as a file
+# record binds `local` beside `blob`, so a later edit under a declined
+# directory re-asks. It once bound the upstream tree alone, and a project that
+# went on editing a declined tests/lib/ was never asked again (claude.insurance,
+# 2026-10-19 batch list on #460). Equal to the template's tree id exactly when
+# the directory matches it. Built in a scratch index and object directory, so
+# the project's own index and objects are never written.
+refresh_local_tree() {
+  local tmp t f b
+  [ -d "$1" ] || { echo absent; return 0; }
+  tmp=$(mktemp -d) || return 1
+  if mkdir "$tmp/objects" \
+     && git --literal-pathspecs ls-files -z --cached --others --exclude-standard -- "$1/" >"$tmp/list" \
+     && while IFS= read -r -d '' f; do
+          [ -f "$f" ] || continue   # a tracked file deleted on disk is not there
+          b=$(git hash-object --no-filters -- "$f") || break
+          printf '%s %s\t%s\0' "$(refresh_local_mode "$f")" "$b" "${f#"$1"/}"
+        done <"$tmp/list" >"$tmp/info" \
+     && [ -z "$f" ] \
+     && GIT_INDEX_FILE="$tmp/index" git update-index -z --index-info <"$tmp/info" \
+     && t=$(GIT_INDEX_FILE="$tmp/index" GIT_OBJECT_DIRECTORY="$tmp/objects" git write-tree --missing-ok); then
+    rm -rf "$tmp"
+    # The empty tree: git keeps no empty directory, so it reads as absent.
+    if [ "$t" = 4b825dc642cb6eb9a060e54bf8d69288fbee4904 ]; then echo absent; else printf '%s\n' "$t"; fi
+    return 0
+  fi
+  rm -rf "$tmp"
+  return 1
+}

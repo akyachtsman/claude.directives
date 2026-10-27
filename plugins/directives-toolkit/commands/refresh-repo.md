@@ -145,12 +145,14 @@ Over git transport, at the pinned head. Per file it prints one of:
 - `NO-TEMPLATE`, `CANNOT-VERIFY`, `RETIRED` — below — then the house-style
   lines (*The house style* below) and one `SUMMARY` line.
 - **`RE-RECORD`** — after `SUMMARY`, only when there are any: the count and
-  paths of every `refresh_kept` file record whose `local` blob is missing or is
-  no longer the file's, **kit files included** (the `CUSTOM` lines reach only
+  paths of every `refresh_kept` record whose `local` is missing or is no
+  longer the file's blob, or a kit directory's local tree, **kit files and
+  directories included** (the `CUSTOM` lines reach only
   files this phase compares, so a kit record otherwise first surfaces as a
   stamp refusal; claude.prop pilot, 2026-10-15). Each one whose file still
   differs from its template is a stamp refusal to come: review it and
-  re-record it with its local blob, or drop it. A record a project made for a
+  re-record it with its local blob (a directory: its local tree, which the
+  stamp's refusal prints), or drop it. A record a project made for a
   caller ("pilot of #460 step 4") binds nothing now, since no caller is
   compared: drop it.
 
@@ -631,19 +633,26 @@ binds to `deleted`.
 stay required, declining them is one step). A project that keeps the kit's
 helpers inline in its spec would otherwise record one entry per
 `tests/lib/` file. Instead, key ONE entry by the directory, with a trailing `/`,
-and bind it to the directory's git **tree** id at the head, which the refusal
-prints beside the first file it refuses there:
+and bind it to the directory's git **tree** id at the head AND to the installed
+directory's own tree (`local`: `absent` when it holds no file), both of which
+the refusal prints beside the first file it refuses there:
 
 ```bash
-jq --arg p "<kit dir>/tests/lib/" --arg t "<tree id printed>" --arg r "<why the project does without it>" \
-  '.refresh_kept[$p] = {tree: $t, reason: $r}' .claude/directive-sync.json \
+jq --arg p "<kit dir>/tests/lib/" --arg t "<tree id printed>" --arg l "<local printed>" \
+   --arg r "<why the project does without it>" \
+  '.refresh_kept[$p] = {tree: $t, local: $l, reason: $r}' .claude/directive-sync.json \
   > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
 ```
 
 It covers every file the template ships under that directory, present or
 absent, in that kit; keyed as shipped (`templates/ui-tests/tests/lib/`) it
-covers every kit the project has. The tree id changes when any file under it
-does, so the question comes back exactly as a file's does. Never the kit root:
+covers every kit whose directory matches its `local`. The upstream tree id
+changes when any template file under it does, and the local one when any file
+under the installed directory does (tracked or untracked, not ignored), so the
+question comes back exactly as a file's does. A record without `local`, written
+before it existed, binds nothing: it once bound the upstream tree alone, and a
+project that went on editing a declined directory was never asked again
+(claude.insurance, #460's batch list). Never the kit root:
 declining the whole kit in one line is the wholesale skip the kit row forbids,
 so `refresh-stamp.sh` honours a directory entry only BELOW the kit root.
 
@@ -761,8 +770,10 @@ upstream moved, which the stamp detects and refuses on. A stamp that changed
 since Phase 2 listed the delta (a pull, a merge) refuses the same way.
 **`synced` is the date the sha last CHANGED**, not the date of the last check:
 a run at the head already stamped leaves `.claude/directive-sync.json`
-byte-identical, so a refresh that changes nothing leaves no diff to commit
-(owner ruling, 2026-10-14). Do not read `synced` as freshness; the sha is what
+untouched, so a refresh that changes nothing leaves no diff to commit
+(owner ruling, 2026-10-14). To check that, compare the file's inode and mtime
+before and after, not its bytes: on the day the sha was stamped, a rewrite is
+byte-identical too (claude.prop, #460's batch list). Do not read `synced` as freshness; the sha is what
 `/env-chk` compares.
 
 **Stamp only a VERIFIED head SHA.** Phases 2 and 3 need nothing from

@@ -27,7 +27,7 @@
 // apfp's ten-file floor, and GUARD_SKIP names a file this guard leaves alone.
 
 import { pathToFileURL } from 'node:url';
-import { readSite, parseSkip, kids, isFn, lineOf, htmlParts, annotate } from './lib.mjs';
+import { readSite, parseSkip, parseJs, kids, isFn, lineOf, htmlParts, annotate } from './lib.mjs';
 
 const NAMES = new Set(['confirm', 'prompt', 'alert']);
 const GLOBAL_OBJ = new Set(['window', 'globalThis', 'self']);
@@ -121,6 +121,25 @@ function blankJsComments(text, units) {
   return out.join('');
 }
 
+/* The dialog call a handler attribute's body makes, or null. The body is
+ * PARSED, like any script, and scanned in global scope, so `console.log('alert(')`
+ * is a string, not a call (Codex, #493). A body that does not parse is one a
+ * script assembles from pieces (`'onclick="del(' + id + ')"'`); its text is
+ * all there is to read, so the plain search stands in for it, and errs toward
+ * flagging. */
+function handlerCall(raw) {
+  const body = decode(raw);
+  let ast = null;
+  try { ast = parseJs(body, 'a handler attribute'); } catch { ast = null; }
+  if (ast) {
+    let found = null;
+    scan(ast, (at, what) => { found = found || what; });
+    return found;
+  }
+  const c = /(^|[^.\w$])((?:window|globalThis|self)\.)?(confirm|prompt|alert)\s*\(/.exec(body);
+  return c ? `${c[2] || ''}${c[3]}(` : null;
+}
+
 export async function run({ siteDir, skipText }) {
   const site = await readSite(siteDir, parseSkip(skipText, 'native-dialog'));
   const hits = [];
@@ -136,9 +155,9 @@ export async function run({ siteDir, skipText }) {
     const ah = /\son[a-z]+\s*=\s*(\\?["'])([\s\S]*?)\1/gi;
     let m;
     while ((m = ah.exec(text))) {
-      const c = /(^|[^.\w$])((?:window|globalThis|self)\.)?(confirm|prompt|alert)\s*\(/.exec(decode(m[2]));
-      if (c) hits.push(annotate(f.file, lineOf(f.src, m.index),
-        `a handler attribute calls ${c[2] || ''}${c[3]}(, the browser's own dialog; use House.confirm / House.ask / House.notice.`));
+      const what = handlerCall(m[1].length > 1 ? m[2].replace(/\\(["'])/g, '$1') : m[2]);
+      if (what) hits.push(annotate(f.file, lineOf(f.src, m.index),
+        `a handler attribute calls ${what}, the browser's own dialog; use House.confirm / House.ask / House.notice.`));
     }
   }
   return { files: site.length, scripts, hits };

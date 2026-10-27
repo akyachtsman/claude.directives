@@ -2430,8 +2430,9 @@ function judge([label, , expected, diagnostic, opts], { code, out }) {
 }
 
 // ── THE CASES RUN SIDE BY SIDE ───────────────────────────────────────────────
-// Run one after another this suite took ~229s of CI's ~7 minutes, and nearly all
-// of it is each case's own node + Playwright start-up, not waiting. The cases
+// Run one after another this suite took 125s of the validate job's 4m53s on
+// main (2026-10-27), nearly all of it each case's own node + Playwright start-up,
+// not waiting. The cases
 // share nothing but the read-only node_modules they symlink, so a pool of forked
 // workers runs them at once, one case per worker at a time, and the report is
 // printed in CASES order whatever order they finish in.

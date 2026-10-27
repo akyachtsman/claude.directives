@@ -17,24 +17,34 @@
 // corner in three successive rounds: a comment marker inside a script, a
 // `<!--` inside an attribute, `data-src` read as `src`. Which <script> runs,
 // where its body starts and what a handler attribute says are the parser's
-// answers, as a browser gives them.
+// answers, as a browser gives them. What a NAME refers to is likewise
+// eslint-scope's answer (analyzeScopes), by owner ruling 2026-10-27, after
+// the same rounds against a hand-written scope walk.
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 const HERE = new URL('.', import.meta.url);
 
-let acorn = null, parse5 = null;
+let acorn = null, parse5 = null, eslintScope = null;
 export async function loadParsers() {
-  if (acorn && parse5) return;
+  if (acorn && parse5 && eslintScope) return;
   try {
     acorn = await import(new URL('node_modules/acorn/dist/acorn.mjs', HERE).href);
     parse5 = await import(new URL('node_modules/parse5/dist/index.js', HERE).href);
+    eslintScope = await import(new URL('node_modules/eslint-scope/lib/index.js', HERE).href);
   } catch (e) {
-    throw new Error('web-guards needs acorn and parse5, which are not installed. Run:\n' +
+    throw new Error('web-guards needs acorn, parse5 and eslint-scope, which are not installed. Run:\n' +
       '  npm ci --ignore-scripts --prefix ' + relative(process.cwd(), new URL('.', HERE).pathname) + '\n' +
       'Underlying error: ' + (e && e.message || e));
   }
+}
+
+/* What every name in a parsed program refers to: eslint-scope's ScopeManager,
+ * ESLint's own spec-complete analysis (the one its no-alert rule reads). It
+ * needs node ranges, which parseJs asks acorn for. */
+export function analyzeScopes(ast) {
+  return eslintScope.analyze(ast, { ecmaVersion: 2026, sourceType: ast.sourceType });
 }
 
 /* One parse: as a classic script first, then as a module (import / export is
@@ -44,7 +54,7 @@ export function parseJs(code, where) {
   // reads source text and must not read the prose about it.
   const parse = extra => {
     const comments = [];
-    const ast = acorn.parse(code, { ecmaVersion: 'latest', allowHashBang: true, onComment: comments, ...extra });
+    const ast = acorn.parse(code, { ecmaVersion: 'latest', allowHashBang: true, ranges: true, onComment: comments, ...extra });
     ast.comments = comments;
     return ast;
   };

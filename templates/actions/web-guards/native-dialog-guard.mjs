@@ -10,7 +10,8 @@
 // (2026-10-27). What carried over unchanged, and why:
 //
 // ⚠️ A CALL IS FLAGGED ONLY WHERE THE NAME RESOLVES TO THE BROWSER'S FUNCTION,
-// and resolving is a PARSE, never a text search: `window.confirm(` (or
+// and resolving is a PARSE plus a scope analysis (eslint-scope, ESLint's own),
+// never a text search: `window.confirm(` (or
 // `globalThis.` / `self.`, or `window['confirm'](`), or a bare `confirm(` /
 // `prompt(` / `alert(` that no enclosing scope binds. A module that takes the
 // app's own dialog as a parameter or const named `confirm` is calling the
@@ -28,83 +29,34 @@
 // apfp's ten-file floor, and GUARD_SKIP names a file this guard leaves alone.
 
 import { pathToFileURL } from 'node:url';
-import { readSite, parseSkip, parseJs, kids, isFn, lineOf, annotate } from './lib.mjs';
+import { readSite, parseSkip, parseJs, analyzeScopes, kids, lineOf, annotate } from './lib.mjs';
 
 const NAMES = new Set(['confirm', 'prompt', 'alert']);
 const GLOBAL_OBJ = new Set(['window', 'globalThis', 'self']);
 
-// ── binding collection ──────────────────────────────────────────────────────
-function patternNames(p, out) {
-  if (!p) return out;
-  switch (p.type) {
-    case 'Identifier': out.add(p.name); break;
-    case 'ObjectPattern': for (const q of p.properties) patternNames(q.type === 'RestElement' ? q.argument : q.value, out); break;
-    case 'ArrayPattern': for (const q of p.elements) patternNames(q, out); break;
-    case 'RestElement': patternNames(p.argument, out); break;
-    case 'AssignmentPattern': patternNames(p.left, out); break;
-  }
-  return out;
-}
-// `var` hoists to the function: every `var` below this node, not crossing a nested function.
-function hoistedVars(node, out) {
-  for (const c of kids(node)) {
-    if (isFn(c)) continue;
-    if (c.type === 'VariableDeclaration' && c.kind === 'var') for (const d of c.declarations) patternNames(d.id, out);
-    hoistedVars(c, out);
-  }
-  return out;
-}
-// What a block (or a function body, or a program) declares directly, imports included.
-function lexicalNames(stmts, out) {
-  for (const s of stmts) {
-    if (s.type === 'ImportDeclaration') { for (const sp of s.specifiers) out.add(sp.local.name); continue; }
-    const d = s.type === 'ExportNamedDeclaration' || s.type === 'ExportDefaultDeclaration' ? s.declaration : s;
-    if (!d) continue;
-    if (d.type === 'VariableDeclaration' && d.kind !== 'var') for (const x of d.declarations) patternNames(x.id, out);
-    if ((d.type === 'FunctionDeclaration' || d.type === 'ClassDeclaration') && d.id) out.add(d.id.name);
-  }
-  return out;
-}
-
-// ── the walk ────────────────────────────────────────────────────────────────
+/* Every dialog call in one parsed program, by report(at, what). Which name a
+ * call means is eslint-scope's answer (lib.mjs), not this guard's: a name is
+ * the browser's when its reference resolves to no declaration in the file. A
+ * hand-written scope walk stood here first, and #493's review found a corner
+ * it missed in round after round (a default parameter, a class static block,
+ * a switch discriminant). */
 export function scan(ast, report) {
-  const stack = [];
-  const bound = name => stack.some(s => s.has(name));
-  const visit = (n, parent) => {
-    let pushed = 0;
-    const push = set => { stack.push(set); pushed++; };
-    if (n.type === 'Program') push(lexicalNames(n.body, hoistedVars(n, new Set())));
-    else if (isFn(n)) {
-      // The parameter scope: a default (`a = confirm(…)`) runs before the body,
-      // so it sees the parameters but none of the body's declarations (Codex, #493).
-      const s = new Set();
-      if (n.type === 'FunctionExpression' && n.id) s.add(n.id.name);
-      for (const p of n.params) patternNames(p, s);
-      push(s);
-    } else if (n.type === 'BlockStatement' && isFn(parent)) push(lexicalNames(n.body, hoistedVars(n, new Set())));
-    else if (n.type === 'BlockStatement') push(lexicalNames(n.body, new Set()));
-    else if (n.type === 'SwitchStatement') push(lexicalNames(n.cases.flatMap(c => c.consequent), new Set()));
-    else if (/^For(In|Of)?Statement$/.test(n.type)) {
-      const init = n.type === 'ForStatement' ? n.init : n.left;
-      if (init && init.type === 'VariableDeclaration' && init.kind !== 'var') {
-        const s = new Set(); for (const d of init.declarations) patternNames(d.id, s); push(s);
-      }
-    } else if (n.type === 'CatchClause') push(patternNames(n.param, new Set()));
-    else if (n.type === 'ClassExpression' && n.id) push(new Set([n.id.name]));
-
+  const refs = new Map();
+  for (const s of analyzeScopes(ast).scopes) for (const r of s.references) refs.set(r.identifier, r);
+  const browsers = id => { const r = refs.get(id); return !r || !r.resolved || r.resolved.defs.length === 0; };
+  const visit = n => {
     if (n.type === 'CallExpression') {
       const c = n.callee.type === 'ChainExpression' ? n.callee.expression : n.callee;
-      if (c.type === 'Identifier' && NAMES.has(c.name) && !bound(c.name)) report(n.start, c.name + '(');
+      if (c.type === 'Identifier' && NAMES.has(c.name) && browsers(c)) report(n.start, c.name + '(');
       if (c.type === 'MemberExpression' && c.object.type === 'Identifier' && GLOBAL_OBJ.has(c.object.name)
-          && !bound(c.object.name)) {
+          && browsers(c.object)) {
         const prop = c.computed ? (c.property.type === 'Literal' ? c.property.value : null) : c.property.name;
         if (NAMES.has(prop)) report(n.start, c.object.name + '.' + prop + '(');
       }
     }
-    for (const k of kids(n)) visit(k, n);
-    while (pushed--) stack.pop();
+    for (const k of kids(n)) visit(k);
   };
-  visit(ast, null);
+  visit(ast);
 }
 
 function decode(s) {

@@ -94,9 +94,23 @@ function namedFunctions(ast, out) {
 
 /* The text a function writes: its string literals and template text, without
  * the keys of an object literal (those are looked up, not written). */
+/* A nested function that has a name of its own (a declaration, or a function
+ * held by a variable, property, method or assignment) is a helper the outer
+ * function OWNS, not text it writes: it is derived on its own, and owning an
+ * esc() must not make its owner an escaper (Codex, #493). An anonymous
+ * callback (`s.replace(/[&<]/g, c => ({ '&': '&amp;', … })[c])`) is part of the
+ * function's own work and is read. */
+function isNamedHelper(n) {
+  if (n.type === 'FunctionDeclaration') return true;
+  if (n.type === 'VariableDeclarator' && isFn(n.init)) return true;
+  if ((n.type === 'Property' || n.type === 'MethodDefinition' || n.type === 'PropertyDefinition') && isFn(n.value)) return true;
+  if (n.type === 'AssignmentExpression' && isFn(n.right)) return true;
+  return false;
+}
 function producedText(node) {
   let out = '';
   const visit = (n, parent) => {
+    if (n !== node && isNamedHelper(n)) return;
     if (n.type === 'Literal' && typeof n.value === 'string' && !(parent && parent.type === 'Property' && parent.key === n)) out += n.value + '\n';
     if (n.type === 'TemplateElement') out += (n.value.cooked || '') + '\n';
     for (const k of kids(n)) visit(k, n);
@@ -127,6 +141,7 @@ function usesTable(fn, tables) {
   if (!tables.size) return '';
   let out = '';
   const visit = n => {
+    if (n !== fn.body && isNamedHelper(n)) return;
     if (n.type === 'Identifier' && tables.has(n.name)) out += tables.get(n.name);
     for (const k of kids(n)) visit(k);
   };

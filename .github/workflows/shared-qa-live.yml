@@ -164,7 +164,9 @@ jobs:
             esac
             printf '%s\n' "$p" >> "$list"
             if [ -d "./$p" ]; then
-              { git ls-files -- "./$p" | grep -Ev '(^|/)[._]' | head -n 3; } >> "$list" || true
+              # -z: git's default quoting turns a non-ASCII name into
+              # "dir/\303\251.txt", a URL that 404s whatever is served (Codex, #490).
+              { git ls-files -z -- "./$p" | grep -zEv '(^|/)[._]' | head -zn 3 | tr '\0' '\n'; } >> "$list" || true
             fi
           done < .github/pages-deny.txt
           mapfile -t deny < <(sort -u "$list" | sed '/^$/d')

@@ -199,7 +199,7 @@ name: 'UI test suite'
 description: >
   Install deps + Playwright, optionally start a bundled local server, run the
   suite, upload results. Single source of truth for the run block shared by
-  qa.yml, qa-live.yml and qa-response.yml.
+  the shared qa and qa-live workflows.
 inputs:
   tests-dir:
     description: 'Directory containing playwright.config.js and package.json'

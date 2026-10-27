@@ -167,11 +167,11 @@ style file, never a workflow or a composite. Show the LOCAL HUNKS and the
 merged diff when asking; `--write` only after the disposition below says
 keep-and-update. Conflicts are resolved by a person, never written.
 
-`RETIRED` names a file whose template upstream deleted (`keepalive.yml`, and
-the watcher workflows `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`,
-`pages-monitor.yml` and `pages-retry.yml`): it is a removal finding, never a
-project-specific file to keep. Delete it, with any secret the line names, in
-this refresh's PR.
+`RETIRED` names a file whose template upstream deleted (`keepalive.yml`, the
+watcher workflows `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`,
+`pages-monitor.yml` and `pages-retry.yml`, and the `qa-response.yml` dispatch
+hook, caller or full copy): it is a removal finding, never a project-specific
+file to keep. Delete it, with any secret the line names, in this refresh's PR.
 It also prints `RETIRED` for an installed copy of a deleted guard script
 (`workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`,
 `check-ui-suite-env.py`, `check-yaml-anchors.py`), `gh_yaml.py`,

@@ -24,6 +24,11 @@
 #     for a login that needs a credential from outside
 #     (docs/standards/cicd-setup.md -> Step 5). Pass each by name.
 #
+# On an Actions-source project the shared run also probes each
+# .github/pages-deny.txt path for a 404 after every watched build, the legacy
+# pages-build-deployment included (global.md -> Hosting & Deployment); with no
+# such file it checks nothing.
+#
 # No `concurrency` here: the shared suite job carries it (one live run per ref;
 # a newer deploy cancels an older one still running). `every-commit: true`
 # gives each deployed commit its own run instead.

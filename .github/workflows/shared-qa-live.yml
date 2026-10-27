@@ -11,7 +11,8 @@
 # conditions read the watched deploy.
 #
 # The ui-suite composite cannot carry per-step timeout-minutes; the suite job's
-# timeout-minutes bounds the whole run.
+# timeout-minutes bounds the whole run. Beside the suite, the deny-list job
+# probes the project's .github/pages-deny.txt paths on the live site.
 #
 # How a called workflow works, and why: docs/internal/shared-workflows.md.
 name: Shared QA — UI Tests (live)
@@ -100,6 +101,126 @@ jobs:
           echo "published: $pub ($why)" >> "$GITHUB_STEP_SUMMARY"
           echo "published=$pub" >> "$GITHUB_OUTPUT"
 
+  # The deny-list, after EVERY watched build (#460 step 1 leftover). The deploy's
+  # own verify job asserts it only after that deploy; a visibility flip can fire
+  # the legacy pages-build-deployment, which republishes the whole unfiltered
+  # tree, serves the app as 200 and passes the suite below. qa-live.yml keeps
+  # that build as a trigger (W2), so this job is what notices the exposure.
+  # It reads the project's .github/pages-deny.txt (no file: nothing to check,
+  # as on a branch-source project) and probes each entry under the live URL.
+  # A directory URL can 404 while the files under it are served, so for an
+  # entry that is a directory in the REPOSITORY it also probes up to three of
+  # its tracked files: a republished tree serves the repository's paths, and
+  # one served file is the exposure. Any URL under a denied path must 404, so
+  # these probes can only find exposure. Files with a `.` or `_` component are
+  # skipped, since the legacy (Jekyll) build does not publish them. The full
+  # per-file check of a filtered deploy stays in the deploy's verify job.
+  deny-list:
+    name: Deny-listed paths serve 404
+    needs: published
+    # The same gate as the suite job below.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       (github.event.workflow_run.event == 'dynamic' ||
+        (github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+         github.event.workflow_run.head_repository.full_name == github.repository)) &&
+       needs.published.outputs.published != 'none')
+    runs-on: ubuntu-latest
+    # Root up to ~2 min, a 30s pause, then two passes of 8s probes over each
+    # entry and up to three files under it: about a minute in practice.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Deny-listed paths serve 404
+        env:
+          URL: ${{ inputs.app-url || vars.APP_URL }}
+        run: |
+          set -euo pipefail
+          if [ ! -f .github/pages-deny.txt ]; then
+            echo "No .github/pages-deny.txt: no deny-list to check."
+            echo "- Deny-list: none declared in .github/pages-deny.txt, nothing checked" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "$URL" ]; then
+            echo "::error::APP_URL repository variable is not set, and no app_url input was given — cannot check the deny-list."
+            exit 1
+          fi
+          url="$URL"
+          case "$url" in */) ;; *) url="${url}/" ;; esac
+          # The deploy's reading of the file: one site-relative path per line,
+          # `#` comments and blank lines ignored, a `.` or `..` component refused.
+          list="$RUNNER_TEMP/deny-urls.txt"
+          : > "$list"
+          while IFS= read -r p || [ -n "$p" ]; do
+            p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
+            p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+            case "$p" in ''|'#'*) continue ;; esac
+            p="${p#/}"; p="${p%/}"
+            case "/$p/" in
+              *'/../'*|*'/./'*|'//') echo "::error::pages-deny.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
+            esac
+            printf '%s\n' "$p" >> "$list"
+            if [ -d "./$p" ]; then
+              { git ls-files -- "./$p" | grep -Ev '(^|/)[._]' | head -n 3; } >> "$list" || true
+            fi
+          done < .github/pages-deny.txt
+          mapfile -t deny < <(sort -u "$list" | sed '/^$/d')
+          if [ "${#deny[@]}" -eq 0 ]; then
+            echo "pages-deny.txt declares no path: nothing to check."
+            echo "- Deny-list: .github/pages-deny.txt declares no path, nothing checked" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          enc() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$1"; }
+          # A failed curl still prints 000 through -w, so the fallback REPLACES
+          # the captured code rather than appending to it.
+          probe() {
+            local c
+            c=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 \
+              -H "Cache-Control: no-cache" "${url}$(enc "$1")?cb=${GITHUB_RUN_ID}-$2") || c="000"
+            printf '%s' "$c"
+          }
+          code="000"
+          for attempt in 1 2 3 4 5; do
+            code=$(probe "" "r${attempt}")
+            [ "$code" = "200" ] && break
+            sleep $((attempt * 6))
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::${url} returned HTTP ${code}, expected 200; the deny-list was not checked, because the site is not serving."
+            echo "- Root ${url}: HTTP ${code}; deny-list NOT checked" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          # Two probes 30s apart, as the deploy does: one 404 can still be the
+          # previous deployment while the CDN switches to the new one.
+          first=()
+          for i in "${!deny[@]}"; do first[i]=$(probe "${deny[i]}" d1); done
+          sleep 30
+          problems=""; evidence=""
+          for i in "${!deny[@]}"; do
+            second=$(probe "${deny[i]}" d2)
+            echo "deny   ${deny[i]}: ${first[i]} then ${second} (expected 404 then 404)"
+            evidence="${evidence}- deny \`${deny[i]}\`: ${first[i]} then ${second}\n"
+            if [ "${first[i]}" != "404" ] || [ "$second" != "404" ]; then
+              problems="${problems}- ${url}${deny[i]} served HTTP ${first[i]} then ${second}, expected 404 on both\n"
+            fi
+          done
+          {
+            echo "## Deny-list on the live site: ${url}"
+            echo ""
+            echo "- Trigger: ${GITHUB_EVENT_NAME}"
+            echo "- ${#deny[@]} path(s) probed twice, 30s apart"
+            echo ""
+            printf '%b' "$evidence"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$problems" ]; then
+            echo "::error::a deny-listed path is served on the live site. If the repository's visibility just changed, look for a 'pages build and deployment' run that republished the whole tree (global.md -> Hosting & Deployment)."
+            printf '%b' "$problems" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
   ui-tests-live:
     needs: published
     # For workflow_run: only run when the deploy succeeded AND published, and
@@ -143,7 +264,7 @@ jobs:
 
     steps:
       # Fail in seconds, not after a cold install (audit, 2026-10-06;
-      # qa-response.yml carries the same guard). The live URL comes from the
+      # shared-qa-response.yml carries the same guard). The live URL comes from the
       # app_url dispatch input or vars.APP_URL and from nothing else. A baseURL
       # default filled in to the kit's playwright.config.js is NOT read by this
       # gate: a project that relied on it goes red here until it sets the

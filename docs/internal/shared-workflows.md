@@ -11,12 +11,20 @@ this page does not repeat them.
 |---|---|
 | `.github/workflows/shared-qa.yml` | `templates/workflows/qa.yml` |
 | `.github/workflows/shared-qa-live.yml` | `templates/workflows/qa-live.yml` |
-| `.github/workflows/shared-qa-response.yml` | `templates/workflows/qa-response.yml` |
+| `.github/workflows/shared-qa-response.yml` | none: retired (below) |
 | `.github/workflows/shared-pages-deploy.yml` | `templates/workflows/pages-deploy.yml` |
 | `.github/workflows/shared-cron-notify.yml` | `templates/workflows/cron-notify.yml` |
 
 Each template is the caller, pinned `@v1` (see *Releases* below), and its
 header says what to set.
+
+**`qa-response` is retired (2026-10-27, #460 step 1 leftover).** Nothing in the
+fleet sends its `repository_dispatch` events (claude.prop's pilot dispatch was
+that workflow's first run there), and `qa-live.yml`'s manual dispatch runs the
+same live suite. Its template is deleted and `/refresh-repo` reports an
+installed caller as `RETIRED`. `shared-qa-response.yml` stays so a caller on
+`@v1` still resolves until its project deletes it: once every project's refresh
+has removed its caller, delete the shared file in a release of its own.
 
 **The full copies are retired (Phase E, owner ruling 2026-10-26).** Until the
 pilots proved out, the templates stayed full copies and a defect was fixed in

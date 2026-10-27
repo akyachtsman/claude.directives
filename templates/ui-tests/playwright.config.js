@@ -91,7 +91,7 @@ export default defineConfig({
   outputDir: SCREENSHOT_DIR,
   // THIS LIST IS THE ONLY THING THAT DECIDES WHAT WIDTHS THIS APP IS EVER
   // RENDERED AT. One spec set (tests/app.spec.js) runs against two targets — the
-  // bundled local server in qa.yml, the live URL in qa-live.yml/qa-response.yml —
+  // bundled local server in qa.yml, the live URL in qa-live.yml —
   // and both inherit this list; exactly one test sets a viewport of its own (S4,
   // at 390). There is no second tier to compensate, so trimming this to phone
   // profiles leaves nothing anywhere rendering the app at laptop width, and CI

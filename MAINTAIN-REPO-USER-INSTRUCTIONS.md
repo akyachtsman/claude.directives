@@ -62,7 +62,7 @@ Corollaries worth memorizing:
   every trigger, so any edit to the config fires the gate on that same PR. The
   gate runs only where a live suite runs, so two holes remain and they are yours.
   The silent one: a repo with no `index.html` and no build skips the local UI job
-  with a notice, taking the gate with it and reporting green. The loud one: `qa-response.yml` skips the composite when
+  with a notice, taking the gate with it and reporting green. The loud one: `qa-live.yml` skips the composite when
   `APP_URL` is unset — that job goes red on its own `Require APP_URL` step, so you
   will hear about it, but the config still went unread on that run. And the gate
   proves the config declares three width classes; it cannot prove those widths

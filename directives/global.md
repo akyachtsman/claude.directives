@@ -1138,8 +1138,8 @@ styles/          ← the committed design contract (tokens.css + components.css)
 .github/
   workflows/     ← the callers from templates/workflows/, each running a
                    shared-*.yml of claude.directives at its pin —
-                   3 unconditional:
-    qa.yml, qa-live.yml, qa-response.yml
+                   2 unconditional:
+    qa.yml, qa-live.yml
                  ← + cron-notify.yml ONLY when the project has a scheduled
                    task (owner ruling, 2026-10-10). A `schedule:` workflow
                    starts recurring work the moment it lands, so it is added
@@ -1357,11 +1357,14 @@ that a visibility flip can still run it (`docs/standards/automations.md` →
   is configured (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
 - **A transiently failed deploy is re-run by hand or by the session.**
   `pages-deploy.yml` retries its own deploy step.
-- ⚠️ **Keeping the arm is NOT detecting the exposure.** A rogue build that
-  republishes the unfiltered tree serves the app as 200 and passes live QA. The
-  deny-list 404 assertions run only inside `pages-deploy.yml`, after its own
-  deploy, so **after any visibility flip, check each deny-listed path for a 404
-  by hand** (`docs/standards/hosting-mechanics.md` → *Arms are not detection*).
+- ⚠️ **Keeping the arm is NOT detecting the exposure on its own.** A rogue build
+  that republishes the unfiltered tree serves the app as 200 and passes the UI
+  suite. What detects it is `qa-live.yml`'s deny-list job, which probes every
+  `.github/pages-deny.txt` path for a 404 after each watched build, the legacy
+  one included, and fails the run on any other answer. It runs only while the
+  arm is kept, so **after any visibility flip, confirm that a `qa-live` run
+  followed the flip's build and its deny-list job is green**
+  (`docs/standards/hosting-mechanics.md` → *Arms are not detection*).
 
 ⚠️ **The post-publish verification is mandatory.** Put the 200/404 assertions
 **inside the deploy workflow**, where a bad filter fails the run that produced

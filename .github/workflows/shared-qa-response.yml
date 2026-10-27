@@ -1,8 +1,13 @@
 # shared-qa-response.yml — event-driven QA against the live URL, started by a
-# repository_dispatch, called by every project's
-# .github/workflows/qa-response.yml (#460 step 4). The caller a project writes
-# is templates/workflows/qa-response.yml, pinned `@v1` (or `@vX.Y.Z`, or a
-# commit SHA). Active sessions receive the results and act on them.
+# repository_dispatch, called by a project's .github/workflows/qa-response.yml
+# (#460 step 4).
+#
+# RETIRED (2026-10-27, #460 step 1 leftover). Nothing sends its
+# repository_dispatch events, and qa-live.yml's manual dispatch runs the same
+# live suite on demand. Its caller template is deleted, /new-repo installs none,
+# and /refresh-repo reports an installed qa-response.yml as RETIRED. This file
+# stays only so a caller still on `@v1` resolves until its project deletes it;
+# delete it once no project carries one (docs/internal/shared-workflows.md).
 #
 # The caller keeps the triggers. `github.event` here is the caller's, so the
 # trigger log and the revision summary read the dispatch itself.

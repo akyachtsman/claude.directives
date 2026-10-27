@@ -92,7 +92,7 @@ Execute these before any task work:
 3. Read the last run's status ONCE via `mcp__github__actions_list` to catch up on
    failures since the last session — a single catch-up read, never a poll loop
    (`git.md` → *GitHub API Quota Economy*)
-4. Confirm `qa.yml`, `qa-live.yml` and `qa-response.yml` are present in `.github/workflows/` — add any missing from `templates/workflows/`
+4. Confirm `qa.yml` and `qa-live.yml` are present in `.github/workflows/` — add any missing from `templates/workflows/`
 
 ## Playwright (owner ruling, 2026-09-24)
 - Always use `page.goto('./')`, never `page.goto('/')`
@@ -523,7 +523,7 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
     it; do not read a green SCHEDULED verdict as a security property
     (directives#349).
   - **One spec set, one viewport source.** The kit runs one suite against the
-    local server (`qa.yml`) and the live URL (`qa-live.yml` / `qa-response.yml`),
+    local server (`qa.yml`) and the live URL (`qa-live.yml`),
     both inheriting the SAME `projects` list, so that list alone decides what
     widths the app is ever rendered at. A laptop-width safety net independent of
     it is an offline/stubbed harness tier with explicit per-test viewports, which

@@ -105,6 +105,30 @@ async function check(label, fn) {
   }
 }
 
+// ── THE WAITING CASES DO THEIR WAITING SIDE BY SIDE ────────────────────────
+// Six cases spent ~96s of this suite's ~100s asleep, one after another: the
+// probe bound (30s), and five that wait for an orphan's marker after a signal
+// (7-14s each). They now wait at the same time, and every case still runs in
+// full; the summary waits for all of them.
+//
+// `later` queues a case to run once every ordinary case has finished, beside the
+// other queued ones. Five are queued: four drive the ladder CLI in a child
+// process and a temp dir of their own, and the externally-signalled case is the
+// only in-process realInstall among them, so ACTIVE_INSTALLS and the armed signal
+// handlers never see a second install beside it. They go at the END because they
+// depend on their timers firing on time, and the ordinary cases use spawnSync,
+// which blocks the event loop: a SIGTSTP meant for 2s, held back past the 3s at
+// which the orphan writes its marker, passes without testing anything.
+//
+// `early` starts a case at once, beside the ordinary ones. Only the probe case
+// is started that way: it races a stub, touches no module state, and a blocked
+// event loop cannot change its verdict -- the probe's 30s timer and the case's
+// 40s one are delayed together, and the earlier one still fires first.
+const deferred = [];
+const running = [];
+function later(label, fn) { deferred.push([label, fn]); }
+function early(label, fn) { running.push(check(label, fn)); }
+
 function eq(actual, expected, what) {
   const a = JSON.stringify(actual);
   const e = JSON.stringify(expected);
@@ -948,16 +972,20 @@ function eq(actual, expected, what) {
   // whole suite exited 0 with no summary and the mutant reddened NOTHING.
   // A case that shares the defect cannot detect it. The race below is the
   // instrument; its timer is deliberately left ref'd so the failure is loud.
-  await check('a browser that never answers is a failure, not a hang', async () => {
+  early('a browser that never answers is a failure, not a hang', async () => {
     const stub = { chromium: { launch: async () => ({
       newContext: () => new Promise(() => {}),   // never settles
       close: async () => {},
     }) } };
     const started = Date.now();
+    let instrument;
     const raced = await Promise.race([
       realLaunch('chromium', '.', stub)().then((out) => ({ out })),
-      new Promise((r) => setTimeout(() => r({ hung: true }), PROBE_TIMEOUT_MS + 10000)),
+      new Promise((r) => { instrument = setTimeout(() => r({ hung: true }), PROBE_TIMEOUT_MS + 10000); }),
     ]);
+    // Cleared once the race is decided, never before: run beside the other
+    // cases, a ref'd timer left behind held the finished suite open 10s more.
+    clearTimeout(instrument);
     if (raced.hung) {
       throw new Error(`realLaunch never returned — the probe is not bounded (${Date.now() - started} ms)`);
     }
@@ -988,7 +1016,7 @@ function eq(actual, expected, what) {
   // ── #355 round 9: the same rule, the branch it did not cover ────────────
 
   // History: browser-ladder.js, realInstall(), "THE GROUP IS REAPED WHEN THE LEADER EXITS" (#355).
-  await check('an externally signalled installer still takes its tree with it', async () => {
+  later('an externally signalled installer still takes its tree with it', async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-sig-')));
     const marker = join(dir, 'orphan.txt');
     const fake = join(dir, 'npx');
@@ -1077,7 +1105,7 @@ function eq(actual, expected, what) {
   // Node's default action and leaves Ctrl-C not stopping the ladder, trading a
   // leaked installer for an unkillable diagnostic. So the assertion is "no
   // descendant survived AND the ladder itself died of the signal".
-  await check('SIGINT on the ladder reaps the installer AND still kills the ladder', () => {
+  later('SIGINT on the ladder reaps the installer AND still kills the ladder', () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-parent-')));
     const marker = join(dir, 'orphan.txt');
     const pkg = join(dir, 'node_modules', 'playwright');
@@ -1135,7 +1163,7 @@ function eq(actual, expected, what) {
     // computed from the platform minus the deny-list — and a `ulimit -t` kill in
     // CI is exactly how it turns up in real life. A mutant that reverts to any
     // hand-written list reddens this even if it remembers SIGQUIT.
-    await check(`${signal} on the ladder reaps the installer AND still kills the ladder`, () => {
+    later(`${signal} on the ladder reaps the installer AND still kills the ladder`, () => {
       const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-sig-')));
       const marker = join(dir, 'orphan.txt');
       const pkg = join(dir, 'node_modules', 'playwright');
@@ -1179,7 +1207,7 @@ function eq(actual, expected, what) {
   // A stop signal's default action SUSPENDS; reaping there would destroy an
   // install the user means to resume with `fg`. This is the one family where
   // over-coverage is not harmless, so it is pinned rather than left to a comment.
-  await check('a stop signal suspends the ladder and does NOT reap the installer', () => {
+  later('a stop signal suspends the ladder and does NOT reap the installer', () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-stop-')));
     const marker = join(dir, 'orphan.txt');
     const pkg = join(dir, 'node_modules', 'playwright');
@@ -1628,6 +1656,8 @@ function eq(actual, expected, what) {
       throw new Error(`the report was truncated: ${proc.stdout.length} bytes, no closing line`);
     }
   });
+
+  await Promise.all([...running, ...deferred.map(([label, fn]) => check(label, fn))]);
 
   if (failures.length) {
     console.log('\ncheck-browser-ladder-cases: FAILED');

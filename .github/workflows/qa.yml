@@ -41,6 +41,9 @@ jobs:
     # that always finishes quickly is still unbounded when it does not. Now
     # 293-344s over 30 runs (measured 2026-10-09), mostly the *-cases suites
     # that drive Playwright: re-check the headroom if that grows past ~7 minutes.
+    # On 2026-10-27 the two slowest (viewport-gate cases 125s, browser-ladder
+    # cases 99s) began running their cases side by side; each file's header
+    # says which cases still run alone and why.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7

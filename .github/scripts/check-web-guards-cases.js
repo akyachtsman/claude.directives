@@ -40,13 +40,16 @@ const ESC = `function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/
 
 // A fake npm: `install --package-lock-only` writes a lockfile (or fails when a
 // dependency is named "unresolvable"); `audit --json` reports by the
-// dependency names in package.json: bad-* is high, mod-* moderate,
+// dependency names in package.json and the node_modules/<name> entries of
+// package-lock.json: bad-* is high, mod-* moderate,
 // registry-down an npm error, garbled not JSON. Anything else is clean.
 const FAKE_NPM = `#!/usr/bin/env node
 const fs = require('fs');
 const [cmd] = process.argv.slice(2);
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-const names = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
+const lock = fs.existsSync('package-lock.json') ? JSON.parse(fs.readFileSync('package-lock.json', 'utf8')) : {};
+const locked = Object.keys(lock.packages || {}).filter(k => k.startsWith('node_modules/')).map(k => k.slice('node_modules/'.length));
+const names = [...new Set([...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }), ...locked])];
 if (cmd === 'install') {
   if (names.includes('unresolvable')) { console.error('npm error 404 Not Found - unresolvable'); process.exit(1); }
   fs.writeFileSync('package-lock.json', '{}'); process.exit(0);
@@ -206,6 +209,15 @@ const CASES = [
   { guard: 'audit', name: "a workspace package is covered by its root's lockfile, not resolved alone",
     files: { 'package.json': pkg({ ok: '1' }, { workspaces: ['packages/*'] }), 'package-lock.json': JSON.stringify({ packages: { '': {}, 'packages/app': {} } }),
       'packages/app/package.json': pkg({ unresolvable: '1' }) }, code: 0, want: 'a workspace of package-lock.json, audited with it' },
+  { guard: 'audit', name: 'a workspace root that declares nothing itself still has its lockfile audited (Codex, #493)',
+    files: { 'package.json': JSON.stringify({ private: true, workspaces: ['packages/*'] }),
+      'package-lock.json': JSON.stringify({ packages: { '': {}, 'packages/app': {}, 'node_modules/bad-x': {} } }),
+      'packages/app/package.json': pkg({ 'bad-x': '1' }) }, code: 1, want: 'high: bad-x', want2: '1 manifest(s) failed: package.json' },
+  { guard: 'audit', name: 'a lockfile with nothing in it is audited, and clean',
+    files: { 'package.json': JSON.stringify({ private: true }), 'package-lock.json': JSON.stringify({ packages: { '': {} } }) }, code: 0, want: 'clean (1 audited' },
+  { guard: 'audit', name: 'a workspace root with no lockfile fails, never silently skipped',
+    files: { 'package.json': JSON.stringify({ private: true, workspaces: ['packages/*'] }), 'packages/app/package.json': pkg({ ok: '1' }) },
+    code: 1, want: 'a workspace root with no lockfile' },
   { guard: 'audit', name: 'no lockfile and nothing resolves: fails as unresolvable, never clean',
     files: { 'package.json': pkg({ unresolvable: '1' }) }, code: 1, want: 'npm could not resolve one' },
   { guard: 'audit', name: 'a registry error fails as "did not run", never as clean',

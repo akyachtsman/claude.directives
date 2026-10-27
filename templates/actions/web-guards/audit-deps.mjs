@@ -15,8 +15,10 @@
 //      loop audited zero trees and reported success.
 //
 // What changed for the fleet:
-//   - A manifest with no dependencies at all (the commonjs package.json the
-//     shared scripts ship) has nothing to audit and is listed as such.
+//   - A manifest with no dependencies and no lockfile (the commonjs
+//     package.json the shared scripts ship) has nothing to audit and is listed
+//     as such. A lockfile is always audited: a workspace root declares nothing
+//     itself and locks every workspace's dependencies.
 //   - A manifest with dependencies but no lockfile is resolved into a lockfile
 //     in a scratch directory (never in the checkout) and that is audited: what
 //     an install would fetch today. apfp's hard failure here would have turned
@@ -85,13 +87,19 @@ function auditTree(manifest, level) {
   let pkg;
   try { pkg = JSON.parse(readFileSync(manifest, 'utf8')); }
   catch (e) { return { verdict: 'error', lines: [`${manifest} is not valid JSON: ${e.message}`] }; }
-  if (!DEP_KEYS.some(k => pkg[k] && Object.keys(pkg[k]).length)) return { verdict: 'none', lines: [] };
-
+  // A lockfile is always audited, whatever the manifest declares itself: a
+  // workspace root may declare nothing and lock every workspace's dependencies
+  // (Codex, #493). Only a manifest with neither has nothing to audit.
   let cwd = dir, scratch = null, note = '';
   const lock = ['package-lock.json', 'npm-shrinkwrap.json'].find(f => existsSync(join(dir, f)));
-  const owner = lock ? null : workspaceRoot(dir);
-  if (owner) return { verdict: 'none', lines: [`a workspace of ${owner}, audited with it`] };
   if (!lock) {
+    const owner = workspaceRoot(dir);
+    if (owner) return { verdict: 'none', lines: [`a workspace of ${owner}, audited with it`] };
+    if (pkg.workspaces) {
+      return { verdict: 'error', lines: ['a workspace root with no lockfile: its workspaces cannot be resolved one by one.',
+        'Commit the package-lock.json npm install writes here.'] };
+    }
+    if (!DEP_KEYS.some(k => pkg[k] && Object.keys(pkg[k]).length)) return { verdict: 'none', lines: [] };
     scratch = mkdtempSync(join(tmpdir(), 'audit-deps-'));
     copyFileSync(manifest, join(scratch, 'package.json'));
     const r = spawnSync(NPM, ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'],

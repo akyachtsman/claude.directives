@@ -237,6 +237,12 @@ would, with a fixture site and suite under `.github/shared-qa-fixture/`:
   fixture config turns into `grepInvert`. The spec has a second test titled
   `(live only)` that throws if it runs, so losing the input turns the self-test
   red (claude.trading pilot, 2026-10-26).
+- The web guards (`templates/actions/web-guards/`) run as every project runs
+  them: the native-dialog and escape-sink guards on the fixture site, and the
+  dependency audit on this whole repository, so a high advisory in a manifest
+  this repo ships (`templates/scripts/package.json`, say) turns the self-test
+  red here before a project inherits it. What each guard catches is proved by
+  `check-web-guards-cases.js` in the validate job, offline.
 
 `shared-cron-selftest` calls `shared-cron-notify.yml` with
 `.github/shared-qa-fixture/cron/notify-task.js`, a task that sends nothing:

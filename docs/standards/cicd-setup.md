@@ -64,7 +64,7 @@ the shared files changed between the commit the pin names and the head.
 | `.github/scripts/package.json` and `browser-ladder.js`, which `test.md` names for local runs | — |
 | `.github/scripts/check-contrast.js`, which `design.md` names for local runs (`/design-intake`) | CI runs the shared copy unless the caller's `contrast-script` names this one, which a project with added pairs does |
 | A scheduled task's `notify-task.js` (Step 9f) | `notify-email.js` is staged beside it at run time |
-| — | the `secret-scan` and `ui-suite` composites, `check-ui-viewports.js`, `notify-email.js`: read from `claude.directives` at the pinned commit |
+| — | the `secret-scan`, `web-guards` and `ui-suite` composites, `check-ui-viewports.js`, `notify-email.js`: read from `claude.directives` at the pinned commit |
 
 Settings that a project once edited into a workflow's `env:` are the caller's
 `with:` inputs, because `env` does not pass into a called workflow. Every input
@@ -178,6 +178,20 @@ In each copied caller (`qa.yml`, `qa-live.yml`, `qa-response.yml`), confirm
 caller's `build-cmd` and `site-dir` to the same values as its `pages-deploy.yml`
 (Step 9d-bis) and `BUILD_PATHS` to its build inputs. Everything else keeps its
 default until the project needs it; each caller's header lists what it takes.
+
+The `qa` caller's Static Checks also run the **web guards**, on by default
+(owner ruling, 2026-10-27, from apfp.claude's CI): no native `confirm()`,
+`alert()` or `prompt()` in the site's code (`design.md` → *9. Confirmations*),
+no HTML-escaped value in a text sink such as `textContent` or a dialog, and
+`npm audit` of every npm dependency tree, failing at `high`. What each reads is
+in its script's header under `templates/actions/web-guards/`. A finding is
+fixed in the code; when a file must stay as it is (a vendored library), name it
+in `guard-skip`, one per line, with `native-dialog:` or `escape-sink:` in front
+for one guard only. A tree that ships nothing can be named in `audit-skip`, and
+`audit-level` moves the threshold. A project's own dialog function goes in
+`text-sinks`. Each guard has an off switch (`native-dialog-guard`,
+`escape-sink-guard`, `audit-deps`: `false`), for a known finding being fixed,
+never as a standing setting.
 
 ---
 

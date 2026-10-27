@@ -1197,6 +1197,11 @@ styles/          ← the committed design contract (tokens.css + components.css)
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo
 - Never echo secrets in workflow logs
+- Every project's QA runs `npm audit` on each npm dependency tree in the repo
+  and fails on a `high` or `critical` advisory (the web guards,
+  `docs/standards/cicd-setup.md` → *Step 2*). Fix it by updating the
+  dependency, the same day; the audit's off switch is for the few days a fix
+  takes, never a standing setting.
 - Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share). **`-l` is load-bearing**: it prints matching FILENAMES, never the matched line — an accidentally committed token is not a registered repo secret, so Actions will not mask it, and a scan that echoes the line leaks the credential it just caught: `git grep --untracked -lE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|xoxb[-]|sb_secret_[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|NlcnZpY2Vfcm9sZ|zZXJ2aWNlX3JvbG)|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----" -- '*.js' '*.ts' '*.tsx' '*.mjs' '*.html' '*.css' '*.json' '*.md' '*.sh' '*.py' '*.toml' '*.sql' '*.jsonl' '*.pem' '*.key' '*.p8' '*id_rsa' '*id_dsa' '*id_ecdsa' '*id_ed25519' '*.env' '.env.*' '*/.env.*' '*.yml' '*.yaml' ':!*node_modules/*'`
 
 ## Pre-Push Verification (Local Gate)

@@ -92,6 +92,7 @@
     "docs/guides/dev-pipeline.md": { "domain": "global", "compartment": "method", "class": "reference" },
     "docs/guides/usage-guide.md": { "domain": "global", "compartment": "method", "class": "reference" },
     "templates/actions/secret-scan/": { "domain": "global", "compartment": "security", "class": "mechanical" },
+    "templates/actions/web-guards/": { "domain": "global", "compartment": "security", "class": "mechanical" },
     "docs/standards/hosting-mechanics.md": { "domain": "global", "compartment": "deploy", "class": "reference", "swap": "permanent" },
     "plugins/directives-toolkit/skills/update-pages/": { "domain": "global", "compartment": "deploy", "class": "behavioral" },
     "templates/workflows/pages-deploy.yml": { "domain": "global", "compartment": "deploy", "class": "mechanical" },
@@ -383,6 +384,18 @@
   },
   "considered": {
     "_comment": "Native capabilities evaluated by the upkeep mandate (CLAUDE.md -> Purpose) and NOT adopted wholesale. externals records what we depend on; this records what we looked at and declined, so an audit reads the verdict instead of re-deriving it. verdict: borrowed (an idea taken, the implementation stays) | rejected (does not fit) | deferred (fits, not yet done). stays = the path that keeps the job; must exist (validated). names = for an entry recording several natives under one key, the manifest or inventory name of each, so the parity diff can match every one of them.",
+    "github-dependency-review": {
+      "vendor": "GitHub",
+      "verdict": "rejected",
+      "rationale": "Considered for the web guards' dependency audit (owner ruling 2026-10-27). actions/dependency-review-action fails a PR only on advisories in dependencies that PR changes, so a tree whose advisory was published after it was locked stays green, which is the case all three pilot projects were in; it also needs the dependency graph, which a private repository has only with GitHub Advanced Security. Dependabot alerts notify but fail nothing. The audit fails on any known advisory in any tree on every run.",
+      "stays": "templates/actions/web-guards/audit-deps.mjs"
+    },
+    "security-guidance-for-web-guards": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Considered as the home of the native-dialog and escape-sink checks (owner ruling 2026-10-27). Its hook warns at edit time inside a session, about innerHTML, the opposite direction to the escape-sink guard, and blocks no PR; code written outside a session never meets it. It stays adopted for what it does (externals); the two guards are CI checks on every PR.",
+      "stays": "templates/actions/web-guards/native-dialog-guard.mjs"
+    },
     "commit-commands": {
       "vendor": "Anthropic",
       "verdict": "rejected",

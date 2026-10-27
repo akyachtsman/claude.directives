@@ -39,7 +39,7 @@
 // (apfp.claude's askConfirm, say) by name.
 
 import { pathToFileURL } from 'node:url';
-import { readSite, parseSkip, analyzeScopes, kids, isFn, lineOf, annotate } from './lib.mjs';
+import { readSite, parseSkip, parseJs, analyzeScopes, kids, isFn, lineOf, annotate } from './lib.mjs';
 
 // `el.<prop> = …` where the property takes plain text.
 const TEXT_PROPS = new Set(['textContent', 'innerText', 'value', 'placeholder', 'title', 'alt', 'ariaLabel']);
@@ -359,6 +359,16 @@ export async function run({ siteDir, skipText, sinksText }) {
     for (const f of site) for (const u of f.units) {
       scanSinks(u.ast, escapers, extra, (at, what) => hits.push(annotate(f.file, lineOf(f.src, u.offset + at),
         `${what}: an HTML-escaped value in a text sink is shown with its entity codes. Drop the escape here, or use innerHTML if markup is meant.`)), u.res || resolver(u.ast));
+    }
+    // A page's handler attributes run too (`onclick="this.textContent = esc(x)"`,
+    // Codex, #493), in global scope, so the page's escapers reach them by name.
+    // A value that does not parse is no handler the browser can run; the
+    // native-dialog guard still reads its text.
+    for (const f of site) for (const h of f.handlers) {
+      let ast = null;
+      try { ast = parseJs(h.value, f.file); } catch { continue; }
+      scanSinks(ast, escapers, extra, (at, what) => hits.push(annotate(f.file, h.line + lineOf(h.value, at) - 1,
+        `${what} in a handler attribute: an HTML-escaped value in a text sink is shown with its entity codes. Drop the escape here.`)));
     }
   }
   return { files: site.length, escapers, hits };

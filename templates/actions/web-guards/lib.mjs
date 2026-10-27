@@ -22,7 +22,7 @@
 // the same rounds against a hand-written scope walk.
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 
 const HERE = new URL('.', import.meta.url);
 
@@ -47,9 +47,12 @@ export function analyzeScopes(ast) {
   return eslintScope.analyze(ast, { ecmaVersion: 2026, sourceType: ast.sourceType });
 }
 
-/* One parse: as a classic script first, then as a module (import / export is
- * the one legitimate reason a body fails as a script). Anything else throws. */
-export function parseJs(code, where) {
+/* One parse. Code KNOWN to be a module (a .mjs file, a <script type="module">,
+ * or a file a page loads that way) is parsed as one, so its top-level names
+ * stay private to it (Codex, #493). Anything else is tried as a classic script
+ * first, then as a module (import / export is the one legitimate reason a body
+ * fails as a script). Anything else throws. */
+export function parseJs(code, where, module = false) {
   // The program's comments ride on the result as `.comments`, for a scan that
   // reads source text and must not read the prose about it.
   const parse = extra => {
@@ -58,15 +61,18 @@ export function parseJs(code, where) {
     ast.comments = comments;
     return ast;
   };
+  const refuse = detail => new Error(where + ' does not parse' + (module ? ' as a module' : ' as a script or a module') +
+    ', and the guard refuses to guess:\n' + detail + '\n  Fix the file, or name it in guard-skip if it is not plain JavaScript.');
+  if (module) {
+    try { return parse({ sourceType: 'module' }); } catch (e) { throw refuse('  module: ' + e.message); }
+  }
   try {
     return parse({ sourceType: 'script', allowReturnOutsideFunction: true });
   } catch (scriptErr) {
     try {
       return parse({ sourceType: 'module' });
     } catch (moduleErr) {
-      throw new Error(where + ' does not parse as a script or a module, and the guard refuses to guess:\n' +
-        '  script: ' + scriptErr.message + '\n  module: ' + moduleErr.message + '\n' +
-        '  Fix the file, or name it in guard-skip if it is not plain JavaScript.');
+      throw refuse('  script: ' + scriptErr.message + '\n  module: ' + moduleErr.message);
     }
   }
 }
@@ -141,7 +147,7 @@ const JS_TYPES = new Set(['', 'module', 'text/javascript', 'application/javascri
  * contents are walked too: a template's markup runs once it is cloned in. */
 export function htmlParts(src) {
   const doc = parse5.parse(src, { sourceCodeLocationInfo: true });
-  const scripts = [], handlers = [];
+  const scripts = [], handlers = [], moduleSrcs = [];
   const walk = node => {
     if (node.attrs) {
       const attrs = new Map(node.attrs.map(a => [a.name.toLowerCase(), a.value]));
@@ -151,15 +157,16 @@ export function htmlParts(src) {
           handlers.push({ name: a.name, value: a.value, line: at ? at.startLine : node.sourceCodeLocation.startLine });
         }
       }
-      if (node.tagName === 'script' && !attrs.has('src')
-          && JS_TYPES.has(String(attrs.get('type') || '').trim().toLowerCase())) {
+      const type = String(attrs.get('type') || '').trim().toLowerCase();
+      if (node.tagName === 'script' && attrs.has('src') && type === 'module') moduleSrcs.push(attrs.get('src'));
+      if (node.tagName === 'script' && !attrs.has('src') && JS_TYPES.has(type)) {
         const loc = node.sourceCodeLocation;
         const text = (node.childNodes || []).map(c => c.value || '').join('');
         if (text.trim() && loc && loc.startTag) {
           const offset = loc.startTag.endOffset;
           // The raw source between the tags, so offsets are the page's own.
           const code = loc.endTag ? src.slice(offset, loc.endTag.startOffset) : src.slice(offset);
-          scripts.push({ offset, code });
+          scripts.push({ offset, code, module: type === 'module' });
         }
       }
     }
@@ -167,7 +174,7 @@ export function htmlParts(src) {
     if (node.content) walk(node.content);
   };
   walk(doc);
-  return { scripts, handlers };
+  return { scripts, handlers, moduleSrcs };
 }
 
 export const lineOf = (src, pos) => src.slice(0, pos).split('\n').length;
@@ -187,13 +194,27 @@ export function kids(n) {
 export const isFn = n => !!n && /^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression)$/.test(n.type);
 
 /* Read every file once: { file, src, units: [{ offset, code, ast }], handlers }.
- * A .js / .mjs file is one unit; a page has one per inline script that runs. */
+ * A .js / .mjs file is one unit; a page has one per inline script that runs.
+ * A file is a module when it is .mjs, or when a page under root loads it with
+ * <script type="module" src> (a relative src from the page's folder, a
+ * root-relative one from root). */
 export async function readSite(root, skip) {
   await loadParsers();
-  return siteFiles(root, skip).map(file => {
+  const files = siteFiles(root, skip).map(file => {
     const src = readFileSync(file, 'utf8');
-    const parts = /\.html?$/i.test(file) ? htmlParts(src) : { scripts: [{ offset: 0, code: src }], handlers: [] };
-    return { file, src, handlers: parts.handlers, units: parts.scripts.map(u => ({ ...u, ast: parseJs(u.code, file) })) };
+    const parts = /\.html?$/i.test(file) ? htmlParts(src) : { scripts: [{ offset: 0, code: src }], handlers: [], moduleSrcs: [] };
+    return { file, src, parts };
+  });
+  const modules = new Set();
+  for (const f of files) for (const ref of f.parts.moduleSrcs) {
+    const path = String(ref).split(/[?#]/)[0];
+    if (!path || /^[a-z][a-z0-9+.-]*:|^\/\//i.test(path)) continue;
+    modules.add(relative('.', path.startsWith('/') ? join(root, path) : join(dirname(f.file), path)).split(sep).join('/'));
+  }
+  return files.map(({ file, src, parts }) => {
+    const module = /\.mjs$/i.test(file) || modules.has(file);
+    return { file, src, handlers: parts.handlers,
+      units: parts.scripts.map(u => ({ ...u, ast: parseJs(u.code, file, module || !!u.module) })) };
   });
 }
 

@@ -17,10 +17,13 @@ skips — so an unconfigured repo is obvious in the Actions log. Replace the bod
 of `notify-task.js` with your project's real notification.
 
 ## Files
-- `.github/workflows/cron-notify.yml`  — the scheduled job (runs `notify-task.js`)
+- `.github/workflows/cron-notify.yml`  — the scheduled job, a caller of `shared-cron-notify.yml` (runs `notify-task.js`)
 - `.github/scripts/notify-task.js`     — task entry point: config-guard + your notification logic
-- `.github/scripts/notify-email.js`    — SMTP helper, `require`d by `notify-task.js`
-- `.github/scripts/package.json`       — declares `nodemailer` (run `npm install` once to generate a lockfile)
+
+The shared workflow stages `notify-email.js` (the SMTP helper `notify-task.js`
+`require`s) and its `package.json` beside the task on each run and installs
+`nodemailer` there, so the project commits neither them nor a lockfile
+(`docs/standards/cicd-setup.md` → 9f).
 
 ## GitHub settings (Settings → Secrets and variables → Actions)
 
@@ -43,9 +46,14 @@ of `notify-task.js` with your project's real notification.
 > editable without a redeploy. **On a public repo, never put a credential
 > (`SMTP_PASS`, any key or PAT) in a Variable — Variables are world-readable.**
 
-> The task's own backend inputs are separate, added to the workflow's `env:`
-> block: `DB_URL` is a **Variable**, `DB_SERVICE_KEY` is a **Secret** (see the
-> data directive `data.md`).
+> The task's own backend inputs are separate (see the data directive
+> `data.md`). `env` does not pass into a called workflow, so the caller's
+> `env:` block cannot carry them. Instead:
+> 1. Add `DB_URL` as a **Variable**. The shared workflow reads it by itself.
+> 2. Add `DB_SERVICE_KEY` as a **Secret**.
+> 3. In `.github/workflows/cron-notify.yml`, uncomment the
+>    `DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}` line under `secrets:`.
+>    A secret reaches the task only when the caller passes it by name.
 
 ### Getting a Gmail / Google Workspace app password
 1. Enable **2-Step Verification** (myaccount.google.com → Security).

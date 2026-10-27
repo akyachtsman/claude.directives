@@ -1,13 +1,13 @@
 # Shared workflows (#460 step 4)
 
-Projects will call this repo's workflows instead of carrying copies of them.
+Projects call this repo's workflows instead of carrying copies of them.
 This page records how the callable versions work and what the Phase A spike
 established. The plan, its phases and the owner's constraints are on #460;
 this page does not repeat them.
 
 ## What exists
 
-| Callable workflow | Template it mirrors |
+| Callable workflow | The caller a project copies |
 |---|---|
 | `.github/workflows/shared-qa.yml` | `templates/workflows/qa.yml` |
 | `.github/workflows/shared-qa-live.yml` | `templates/workflows/qa-live.yml` |
@@ -15,12 +15,16 @@ this page does not repeat them.
 | `.github/workflows/shared-pages-deploy.yml` | `templates/workflows/pages-deploy.yml` |
 | `.github/workflows/shared-cron-notify.yml` | `templates/workflows/cron-notify.yml` |
 
-Each file's header carries the caller a project writes for it, pinned
-`@v1` (see *Releases* below).
+Each template is the caller, pinned `@v1` (see *Releases* below), and its
+header says what to set.
 
-The templates under `templates/workflows/` stay full copies, unchanged, until
-the pilot has proven out (owner, 2026-10-16). Until the templates become
-callers, a defect is fixed in both files.
+**The full copies are retired (Phase E, owner ruling 2026-10-26).** Until the
+pilots proved out, the templates stayed full copies and a defect was fixed in
+both files (owner, 2026-10-16). With all four pilots green, the templates became
+callers. The last full copies are in release `v1.0.5` and in git history; a
+defect is now fixed once, in the shared workflow. A refresh installs no
+workflow: it reports each caller's pin, and names a workflow that calls nothing
+as the project's own (`refresh-repo.md` → *Callers*).
 
 ## Releases (Phase B, owner, 2026-10-25)
 
@@ -41,7 +45,10 @@ pilot pin `55af14e`, and stay there until the owner moves them.
 **Cutting a release.** A session cannot create a tag or a release (spike item
 4 below), so `.github/workflows/release.yml` does it with the run's own token,
 and the owner presses it: on the Actions tab, the Release workflow's Run
-workflow button, on `main`.
+workflow button, on `main`. A session may dispatch the same workflow through
+the GitHub tools' workflow-run call when the owner has asked for the release.
+The step-by-step for the owner is `MAINTAIN-REPO-USER-INSTRUCTIONS.md` →
+*Releasing the shared workflows*.
 
 - `bump` is `minor` for a normal batch, `patch` for a fix-only batch, and
   `major` for a breaking change to an input or a secret, which starts `v2`
@@ -64,7 +71,7 @@ the notes are `.github/scripts/release-plan.js`, pinned by
 (say `v1.1.0`) points `v1` back at it and cuts nothing. The `vX.Y.Z` tags
 never move, and the next release still counts up from the highest one.
 
-## How a callable workflow differs from its template
+## How a callable workflow differs from the old full copies
 
 - **Shared files come from this repo, at the called commit.** Each job that
   needs a shared file checks this repo out into `.claude-directives/` at
@@ -96,23 +103,24 @@ never move, and the next release still counts up from the highest one.
   that script needs the commonjs `package.json` beside it. The job copies both
   from the shared checkout into `.github/scripts/` before the composite runs.
   A project's own copy is replaced for that run, with a notice when it differed.
-  The composite itself is not changed, because projects still copy it.
+  The composite itself is unchanged; a project's leftover copy of it is a
+  `SHARED-COPY` to a refresh, to delete once nothing in the project names it.
 
 - **What the caller keeps.** Its `on:` triggers (they name the project's own
   deploy workflow, schedule or dispatch types), its `permissions` (a called
   workflow can only narrow them: `actions: read` for `qa-live`'s published
   lookup; `deployments: read`, `pages: write` and `id-token: write` for the
-  deploy) and, for the deploy, the template's workflow-level `concurrency`.
+  deploy) and, for the deploy, a workflow-level `concurrency`.
   `qa-live`'s concurrency moved onto its suite job, so its caller needs none.
 - **The published lookup reads both job names.** In a caller's run, a called
   deploy's job shows as `<caller job> / Publish`. `shared-qa-live.yml`
-  matches that form as well as the template's `Publish`; without it, a
+  matches that form as well as a plain `Publish`; without it, a
   deploy that published nothing would read as one that did.
 - **The cron task stays the project's.** `notify-task.js` is project code, so
   `shared-cron-notify.yml` runs the caller's own script and stages only
   `notify-email.js` and the commonjs `package.json` beside it. The task gets
   the email transport and the `DB_URL` / `DB_SERVICE_KEY` pair `data.md`
-  names; a task that needs other names keeps the full copy for now.
+  names; a task that needs other names is a finding for this repo.
 - `shared-pages-deploy.yml` fetches nothing from this repo: it runs no shared
   script.
 - **A gated admin project (apfp.claude, 2026-10-26).** apfp.claude's config
@@ -129,9 +137,9 @@ never move, and the next release still counts up from the highest one.
   404. Such an entry exists in the repository but outside `site-dir`, so the
   filter reports it as a notice ("not published; probed") instead of the
   "matches nothing" warning, which stays for an entry inside `site-dir` or
-  nowhere at all. The template has the same rule.
-- **A live run for every commit (apfp.claude pilot, 2026-10-26).** The
-  template groups live runs by ref, so a newer deploy cancels an older one
+  nowhere at all.
+- **A live run for every commit (apfp.claude pilot, 2026-10-26).** By
+  default live runs group by ref, so a newer deploy cancels an older one
   still running; the newest commit carries the older one's changes. apfp.claude
   ruled (2026-08-26) that every merged commit gets its own live run, and its
   pilot found two merges inside one ~20-minute run lost the first. With
@@ -144,7 +152,7 @@ never move, and the next release still counts up from the highest one.
   GitHub keeps only the first few annotations of a step and the lists hold up
   to 60 paths. The re-run refusal and the deploy-timeout messages name the
   caller's own workflow (`$GITHUB_WORKFLOW`), not `Pages Deploy`: apfp.claude's
-  caller is named `Pages`. The template has both changes.
+  caller is named `Pages`.
 
 ## What a project keeps (claude.prop pilot, 2026-10-25)
 
@@ -170,11 +178,10 @@ The pilot, claude.prop #134 (merged as `c859d91`), pinned its callers to
    The step 4 plan had listed `browser-ladder.js` among the scripts that would
    be read from this repo at run time.
 4. **The refresh on a project with callers.** `/refresh-repo` reports a caller
-   as `CALLER` and never merges or overwrites it. `refresh-callers.sh` leaves
-   callers out, so the deleted composites and scripts are not offered back.
-   The stamp's applied-check never required them, because it reads each
-   workflow's own text; a case now proves that. `kit-dirs.sh` reads a caller's
-   `tests-dir:`. The rules are in `refresh-repo.md` → *A project on callers*.
+   as `CALLER` and never merges or overwrites it, and the deleted composites
+   and scripts are not offered back. `kit-dirs.sh` reads a caller's
+   `tests-dir:`. Since Phase E a refresh installs no workflow at all; the rules
+   are in `refresh-repo.md` → *Callers*.
 
 The pilot ran `qa`, `qa-live` (published lookup and live suite) and
 `qa-response` for real. prop has no `pages-deploy.yml` and no `cron-notify.yml`,
@@ -238,7 +245,7 @@ installed, and the caller's `force` input arrived.
 
 `qa-live`, `qa-response` and the deploy have no self-test here: each needs a
 live site, a dispatch or a Pages deployment this repo does not have. Their
-differences from the templates are the ones listed above, and the pilot runs
+differences from the old full copies are the ones listed above, and the pilot runs
 each of them for real.
 
 Because the self-test calls the workflow by local path, it runs in this

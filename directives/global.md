@@ -1136,7 +1136,8 @@ index.html       ← the app's entry page, written by the first build, not by
                    the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
-  workflows/     ← the standard template set from templates/workflows/ —
+  workflows/     ← the callers from templates/workflows/, each running a
+                   shared-*.yml of claude.directives at its pin —
                    3 unconditional:
     qa.yml, qa-live.yml, qa-response.yml
                  ← + cron-notify.yml ONLY when the project has a scheduled
@@ -1147,7 +1148,8 @@ styles/          ← the committed design contract (tokens.css + components.css)
                  ← + pages-deploy.yml ONLY on an ACTIONS-SOURCE project: it
                    is that project's deploy (retry built in)
                  ← keepalive.yml is NOT standard (why: cicd-setup.md → Step 9f)
-  scripts/
+  scripts/       ← browser-ladder.js + package.json (the scripts a directive
+                   names), and the project's own
     ui-tests/
 ```
 
@@ -1286,8 +1288,8 @@ client-side Supabase + RLS.
   change:
   - **PR QA (`qa.yml`)** runs the same build and serves the build's output
     directory instead of the repo root, on every PR, so it never tests the
-    unbuilt tree. The template does both once its `BUILD_CMD` and `SITE_DIR`
-    are set to the same values as `pages-deploy.yml`; its `BUILD_PATHS` lists
+    unbuilt tree. The caller does both once its `build-cmd` and `site-dir`
+    inputs are set to the same values as `pages-deploy.yml`'s; its `BUILD_PATHS` lists
     the build inputs for the toolkit's Pages edit reminder.
   - **Live QA:** add the deploy workflow's exact `name:`
     ("Pages Deploy" for `pages-deploy.yml`) to `qa-live.yml`'s
@@ -1317,8 +1319,9 @@ this test, in order:
    public** — a real secret, unreleased material, anything whose exposure is a
    problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
    rather than the tree: rsync the repo minus a deny-list, upload that artifact,
-   deploy it (`templates/workflows/pages-deploy.yml` does exactly this, build
-   step included for an opted-in project).
+   deploy it (`templates/workflows/pages-deploy.yml`, a caller of
+   `shared-pages-deploy.yml`, does exactly this, build step included for an
+   opted-in project).
 2. **Otherwise** → branch-source is fine and the push is the deploy, unless the
    project has opted into a CI build, which forces Actions-source (above).
 

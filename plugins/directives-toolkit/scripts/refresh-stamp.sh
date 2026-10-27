@@ -192,18 +192,13 @@ if [ "$tree" = yes ]; then
   # The kit's installed location, from the SAME file Kit defects runs.
   kit_dirs=$(bash "$(dirname "${BASH_SOURCE[0]}")/kit-dirs.sh")
 
-  # Callers of the shared workflows (#460 step 4), said once. Nothing below
-  # needs a special case for them: the dependency pass reads each installed
-  # workflow's OWN text, and a caller names no composite and none of the
-  # scripts its template needs, so the composites and scripts a project
-  # deleted when it moved to callers are never required (claude.prop pilot,
-  # 2026-10-25). The caller itself is compared like any workflow when the
-  # delta lists its template: a refresh_kept record keeps it.
-  for w in .github/workflows/*.yml .github/workflows/*.yaml; do
-    called=$(refresh_caller_of "$w") || continue
-    echo "caller: $w calls $called -- the composites and scripts its template needs come from claude.directives at run time, so their absence here is not required"
-  done
-
+  # Workflows and composites are never installed by a refresh (Phase E of #460
+  # step 4, owner ruling 2026-10-26): a project's workflows are callers, or its
+  # own, and the composites and the shared scripts are read from
+  # claude.directives at the called commit. So the delta's templates/workflows/
+  # and templates/actions/ paths are not compared here, a script is compared
+  # only when a directive names it (pass 2), and nothing a caller does not name
+  # is required. refresh-drift.sh names each workflow and each stale copy.
   # 1. Every path the delta lists.
   while IFS=$(printf '\t') read -r st t; do
     [ -n "${t:-}" ] || continue
@@ -227,10 +222,8 @@ $k
 $kit_dirs
 KITS
         continue ;;
-      templates/workflows/*)    p=".github/workflows/${t#templates/workflows/}"; need= ;;
-      templates/actions/*)      p=".github/actions/${t#templates/actions/}"; a=${t#templates/actions/}
-                                need=; [ -d ".github/actions/${a%%/*}" ] && need="its composite is installed" ;;
-      templates/scripts/*)      p=".github/scripts/${t#templates/scripts/}"; need= ;;   # dependency pass decides absence
+      templates/workflows/* | templates/actions/*) continue ;;   # never installed (above)
+      templates/scripts/*) continue ;;   # pass 2: only the scripts a directive names
       templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}"
                                 need=; [ -f .claude/settings.json ] && need="the settings row runs it" ;;
       templates/styles/*) continue ;;   # pass 4 below, every run, marked projects only
@@ -241,7 +234,7 @@ KITS
       continue
     fi
     if [ ! -e "$p" ] && [ -z "$need" ]; then
-      case "$t" in templates/scripts/*) ;; *) echo "absent locally, not compared: $p" ;; esac
+      echo "absent locally, not compared: $p"
       continue
     fi
     check "$p" "$t" "$need"
@@ -249,14 +242,15 @@ KITS
 $delta_list
 DELTA
 
-  # 2. Every dependency, delta or not.
-  deps=; queue=; seen=" "
+  # 2. Every dependency, delta or not: the scripts a directive names, and every
+  # installed kit as its whole upstream directory.
+  deps=
   # The script set comes from derive-scripts.sh, the SAME file Phase 2's install
   # derivation runs, so this check can never be wider or narrower than the
   # install (#398). A derivation that fails refuses the stamp: read as "no
   # scripts", it would pass every dependency it never saw.
   derive="$(dirname "${BASH_SOURCE[0]}")/derive-scripts.sh"
-  scan() {   # names in $1: scripts into deps, composites onto the queue
+  scan() {   # the scripts named in $1, into deps
     local d
     if ! d=$(printf '%s\n' "$1" | bash "$derive"); then
       echo "CANNOT VERIFY: the script derivation ($derive) failed"
@@ -264,12 +258,7 @@ DELTA
     fi
     deps="$deps
 $d"
-    queue="$queue $(printf '%s\n' "$1" | grep -oE '\./\.github/actions/[A-Za-z0-9_.-]+' | sed 's|^\./||' | tr '\n' ' '; true)"
   }
-  for w in .github/workflows/* .github/actions/*/action.yml; do
-    [ -f "$w" ] && scan "$(cat "$w")"
-  done
-  for a in .github/actions/*/; do [ -d "$a" ] && queue="$queue ${a%/}"; done
   # Every installed kit, as its whole upstream directory (see above).
   kit_files=$(printf '%s\n' "$shipped" | grep '^templates/ui-tests/' | grep -vxF templates/ui-tests/package-lock.json; true)
   while IFS= read -r k; do
@@ -291,20 +280,13 @@ FILES
   done <<KITS
 $kit_dirs
 KITS
-  for d in global git design test data; do
-    scan "$(git -C "$up" show "$head:directives/$d.md" 2>/dev/null; true)"
-  done
-  while [ -n "${queue// /}" ]; do
-    # shellcheck disable=SC2086  # deliberate word-split of the queue
-    set -- $queue; a=$1; shift; queue="$*"
-    case "$seen" in *" $a "*) continue ;; esac
-    seen="$seen$a "
-    t="templates/actions/${a#.github/actions/}"
-    files=$(printf '%s\n' "$shipped" | grep -F "$t/"; true)
-    [ -n "$files" ] || continue   # not an upstream composite: the project's own
-    deps="$deps
-$(printf '%s\n' "$files" | sed "s|^templates/actions/|.github/actions/|")"
-    scan "$(git -C "$up" show "$head:$t/action.yml" 2>/dev/null; true)"
+  for d in $(printf '%s\n' "$shipped" | grep -E '^directives/[^/]+\.md$'; true); do
+    if ! dtext=$(git -C "$up" show "$head:$d" 2>/dev/null); then
+      echo "CANNOT VERIFY: $d at $head could not be read, so the scripts it names are unknown"
+      unapplied=1
+      continue
+    fi
+    scan "$dtext"
   done
   while IFS= read -r p; do
     [ -n "$p" ] || continue
@@ -324,30 +306,13 @@ ${kit_dirs:-.github/scripts/ui-tests}
 KITS
     [ -n "$t" ] || case "$p" in
       .github/scripts/*) t="templates/scripts/${p#.github/scripts/}" ;;
-      .github/actions/*) t="templates/actions/${p#.github/actions/}" ;;
       *) continue ;;
     esac
-    grep -qxF "$t" <<<"$shipped" || continue   # not shipped upstream: the project's own
-    check "$p" "$t" "an installed composite or kit ships it, or something installed or a directive names it" "$pk"
+    grep -qxF "$t" <<<"$shipped" || continue   # not shipped upstream: nothing to install
+    check "$p" "$t" "an installed kit ships it, or a directive names it" "$pk"
   done <<DEPS
 $(printf '%s\n' "$deps" | sort -u)
 DEPS
-  # The lockfile. It is generated, never shipped, so it is checked for
-  # PRESENCE, not compared -- and only where the scheduled-task kit is
-  # installed (pilots, 2026-10-13). package.json alone does not need it: the qa
-  # workflows and the ui-suite composite name package.json for its
-  # "type": "commonjs", which every CommonJS script there needs, and nothing of
-  # theirs runs `npm install` in .github/scripts. The kit does: cron-notify.yml
-  # installs nodemailer there and its setup-node cache names the lockfile, so
-  # without it the job fails before its own install (Codex, #409).
-  cron_kit=
-  for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
-    [ -f "$f" ] && cron_kit="$cron_kit $f"
-  done
-  if [ -n "$cron_kit" ] && [ ! -f .github/scripts/package-lock.json ]; then
-    echo "UNAPPLIED: .github/scripts/package-lock.json is absent but required by the scheduled-task kit (${cron_kit# }) -- run npm install in .github/scripts and commit it"
-    unapplied=1
-  fi
 
   # 3. .claude/settings.json, as sets (see above).
   st_tpl=$(git -C "$up" show "$head:templates/claude-settings.json" 2>/dev/null) || st_tpl=

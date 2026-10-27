@@ -1,11 +1,25 @@
-name: Scheduled Notification
-
-# Scheduled job, installed only when the project has a scheduled task (not by
-# /new-repo; docs/standards/cicd-setup.md Step 9f): runs notify-task.js, which
-# emails a notification via notify-email.js. notify-task.js guards on the SMTP
+# cron-notify.yml — a scheduled job that runs the project's own task,
+# .github/scripts/notify-task.js, which emails through notify-email.js. A
+# CALLER: copy it to .github/workflows/cron-notify.yml. The job runs in
+# claude.directives' .github/workflows/shared-cron-notify.yml at the release
+# pinned below, which stages notify-email.js and its package.json beside the
+# task and installs their dependency, so the project carries only the task.
+# Pins, releases and what a project keeps: docs/standards/cicd-setup.md ->
+# Callers and pins.
+#
+# Installed only when the project has a scheduled task (not by /new-repo;
+# docs/standards/cicd-setup.md Step 9f): a `schedule:` trigger starts recurring
+# work the moment it lands. The starter notify-task.js guards on the SMTP
 # config and emits a GitHub Actions notice if it's missing (needed only if the
-# project sends email). Customize notify-task.js with your task; add its own env below.
-# See docs/guides/cron-email-notifications.md for setup.
+# project sends email); replace its body with your task. Setup:
+# docs/guides/cron-email-notifications.md.
+#
+# The task's environment: only the names shared-cron-notify.yml passes reach
+# it, the email transport below (variables ALERT_TO, ALERT_FROM, SMTP_HOST,
+# SMTP_PORT, SMTP_USER; secret SMTP_PASS) and the backend pair data.md names
+# (variable DB_URL, secret DB_SERVICE_KEY). Pass each secret by name.
+
+name: Scheduled Notification
 
 on:
   schedule:
@@ -26,44 +40,9 @@ permissions:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10            # always cap scheduled jobs so a hang can't run for hours
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-          # Requires a committed lockfile — run `npm install` once in .github/scripts
-          # and commit package-lock.json (same policy as the qa workflows).
-          cache-dependency-path: .github/scripts/package-lock.json
-      - name: Install deps
-        working-directory: .github/scripts
-        run: npm install
-      # Name every file this job needs by its FULL PATH:
-      # .github/scripts/notify-task.js (run below), .github/scripts/notify-email.js
-      # (which it requires) and .github/scripts/package.json (what `npm install`
-      # above reads). Once this workflow is installed, /refresh-repo derives the
-      # scripts to install from the `.github/scripts/<file>` paths a workflow
-      # names, so a bare
-      # `node notify-task.js` left all three out (#398). These names ARE the
-      # dependency record: claude.directives' derivation guard fails its CI if
-      # a file this job needs stops being named in this workflow. The working directory
-      # stays .github/scripts: a project's own task body may use paths relative
-      # to it, as notify-task.js documents (Codex, #409).
-      - name: Run task
-        working-directory: .github/scripts
-        env:
-          # --- your task's own inputs (example; names match the data directive) ---
-          # DB_URL: ${{ vars.DB_URL }}
-          # DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}
-          # --- email transport (consumed by notify-email.js) ---
-          # Host/port/user/from are non-sensitive → Variables; only SMTP_PASS is a secret.
-          ALERT_TO:   ${{ vars.ALERT_TO || vars.SMTP_USER }}   # workflow fallback (script requires ALERT_TO)
-          ALERT_FROM: ${{ vars.ALERT_FROM }}                   # empty → notify-email.js defaults to SMTP_USER
-          SMTP_HOST:  ${{ vars.SMTP_HOST }}
-          SMTP_PORT:  ${{ vars.SMTP_PORT }}
-          SMTP_USER:  ${{ vars.SMTP_USER }}
-          SMTP_PASS:  ${{ secrets.SMTP_PASS }}
-          FORCE:      ${{ github.event.inputs.force }}
-        run: node "$GITHUB_WORKSPACE/.github/scripts/notify-task.js"
+    uses: akyachtsman/claude.directives/.github/workflows/shared-cron-notify.yml@v1
+    with:
+      force: ${{ inputs.force == 'true' }}
+    secrets:
+      SMTP_PASS: ${{ secrets.SMTP_PASS }}
+      # DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}   # only if the task reads it

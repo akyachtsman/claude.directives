@@ -3,8 +3,9 @@ r"""Guard /refresh-repo's referenced-script derivation against the real callers.
 
 WHY IT EXISTS. refresh-repo Phase 2 (*Deriving the referenced-script set*)
 derives WHICH .github/scripts/* files a refresh must install, by running
-plugins/directives-toolkit/scripts/derive-scripts.sh over the caller
-workflows/actions/directives it is installing; Phase 3's applied-check
+plugins/directives-toolkit/scripts/derive-scripts.sh over the callers -- the
+workflows, composites and directives it installed until Phase E of #460 step 4,
+the directives alone since (CALLER_GLOBS); Phase 3's applied-check
 (refresh-stamp.sh) runs the same file. The derivation is a few stages of grep
 and sed; the callers are YAML edited independently. Nothing tied the two
 together, so a caller could change the FORM of an invocation and silently fall
@@ -65,8 +66,8 @@ form-independent scan, these ways:
   6. NEEDS NAMED. The derivation finds only what a caller NAMES, so a caller
      must name every file it needs by its `.github/scripts/` path -- and the
      name may sit in a comment, because the token grep reads mentions too.
-     cron-notify.yml names notify-email.js and package.json ONLY in a comment:
-     reword it and both drop out of the derivation with no error. So the
+     cron-notify.yml once named notify-email.js and package.json ONLY in a
+     comment: reworded, both dropped out of the derivation with no error. So the
      dependencies are derived from the files that CREATE them, never from a
      hand-list here: a local `require`/`import` in the template source of a
      script the caller names (followed transitively), `npm install|ci` run
@@ -122,6 +123,7 @@ sys.dont_write_bytecode = True
 
 import ast
 import json
+import os
 import posixpath
 import re
 import shlex
@@ -150,8 +152,15 @@ DERIVE = Path("plugins/directives-toolkit/scripts/derive-scripts.sh")
 # `.github/scripts/browser-ladder.js`, which no workflow or composite invokes,
 # so a YAML-only caller set derived nothing for it and a refresh shipped the
 # directive without the script it tells you to run.
-CALLER_GLOBS = ("templates/workflows/*.yml", "templates/actions/*/action.yml",
-                "directives/*.md")
+# Phase E of #460 step 4 (owner ruling, 2026-10-26): the workflow templates are
+# callers of the shared workflows, and a refresh installs no workflow or
+# composite, so the directives are the whole caller set -- the derivation runs
+# over directives/*.md alone (refresh-repo.md and new-repo.md). The readers for
+# workflow and composite callers (check 6's npm and YAML parts) stay, and the
+# cases still drive them: check-refresh-derivation-cases.py sets
+# DERIVATION_CALLER_GLOBS to the globs its fixtures use. Only a run with that
+# variable reads anything but the directives.
+CALLER_GLOBS = tuple(os.environ.get("DERIVATION_CALLER_GLOBS", "directives/*.md").split())
 
 # An INLINE copy of the token grep, in either caller. Check 4 refuses one: the
 # derivation must live in DERIVE alone.
@@ -808,7 +817,8 @@ def main():
             "      path, so a refresh would install the caller and leave these out.\n\n"
             + "".join(f"      UNNAMED: {d}\n              needed by {c}: {w}\n" for d, c, w in unnamed)
             + "\n      Name each path in the caller (a comment is enough -- the token grep reads\n"
-            "      mentions), as cron-notify.yml does. Do not widen the derivation instead."
+            "      mentions), as test.md names package.json beside browser-ladder.js. Do not\n"
+            "      widen the derivation instead."
         )
 
     print(

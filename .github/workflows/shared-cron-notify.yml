@@ -1,48 +1,27 @@
-# shared-cron-notify.yml — the callable version of
-# templates/workflows/cron-notify.yml (#460 step 4, Phase A): a scheduled job
-# that runs the project's own task script, which emails through
-# notify-email.js. A project with a scheduled task calls it instead of
-# carrying the copy:
-#
-#   name: Scheduled Notification
-#   on:
-#     schedule:
-#       - cron: '0 7 * * *'     # UTC, best-effort; DST notes in the template
-#     workflow_dispatch:
-#       inputs:
-#         force:
-#           description: 'Bypass any in-script time guard (manual run)'
-#           required: false
-#           default: 'false'
-#   permissions:
-#     contents: read
-#   jobs:
-#     run:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-cron-notify.yml@v1
-#       with:
-#         force: ${{ inputs.force == 'true' }}
-#       secrets:
-#         SMTP_PASS: ${{ secrets.SMTP_PASS }}
-#         DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}     # only if the task reads it
+# shared-cron-notify.yml — a scheduled job that runs the project's own task
+# script, which emails through notify-email.js, called by the
+# .github/workflows/cron-notify.yml of a project with a scheduled task (#460
+# step 4). The caller a project writes is templates/workflows/cron-notify.yml,
+# pinned `@v1` (or `@vX.Y.Z`, or a commit SHA).
 #
 # Secrets go by name, never `secrets: inherit`: why, in shared-qa.yml's header.
 #
-# What stays the project's: the schedule (its `on:`), and the task itself,
-# .github/scripts/notify-task.js (or the `task-script` input), which is
-# project code. What comes from this repo, at the commit this workflow was
-# called at: notify-email.js and the commonjs package.json, staged beside the
-# task script, since the task requires './notify-email.js'. The dependencies
-# install from that package.json with no lockfile and no cache.
+# What stays the project's: the schedule (its `on:`, with the DST notes in the
+# template), and the task itself, .github/scripts/notify-task.js (or the
+# `task-script` input), which is project code. What comes from this repo, at
+# the commit this workflow was called at: notify-email.js and the commonjs
+# package.json, staged beside the task script, since the task requires
+# './notify-email.js'. The dependencies install from that package.json with no
+# lockfile and no cache, so the project commits neither.
 #
 # The task's environment. `env` does not pass into a called workflow, so only
-# the names below reach the task: the email transport the template wires, and
-# the backend pair data.md names (DB_URL as a variable, DB_SERVICE_KEY as a
-# secret). A task that needs anything else keeps the full copy of the
-# template for now.
+# the names below reach the task: the email transport (ALERT_TO, ALERT_FROM,
+# SMTP_HOST, SMTP_PORT, SMTP_USER as variables, SMTP_PASS as a secret) and the
+# backend pair data.md names (DB_URL as a variable, DB_SERVICE_KEY as a
+# secret). A task that needs another name is a finding for this repo: add it
+# here as an optional secret or a variable read, never a project copy.
 #
-# Fix a defect in BOTH this file and the template until the templates become
-# callers (Phase E). How the callable workflows differ from their templates:
-# docs/internal/shared-workflows.md.
+# How a called workflow works, and why: docs/internal/shared-workflows.md.
 name: Shared Scheduled Notification
 
 on:
@@ -129,7 +108,7 @@ jobs:
         working-directory: ${{ steps.stage.outputs.dir }}
         run: npm install --no-package-lock --no-audit --no-fund
 
-      # The working directory is the task's own, as in the template: a
+      # The working directory is the task's own: a
       # project's task body may use paths relative to it.
       - name: Run task
         working-directory: ${{ steps.stage.outputs.dir }}

@@ -38,7 +38,7 @@ Run in order:
    beats `README.md` as the directory index, so on branch-source a missing root
    `index.html` means the site will fall back to rendering `README.md`. On
    Actions-source the homepage is the published directory's own `index.html`
-   (`SITE_DIR` after any build); `pages-deploy.yml` refuses to publish one
+   (the caller's `site-dir` after any build); `pages-deploy.yml` refuses to publish one
    without it.
 
 3. **Identify the deploy workflow.** GitHub Pages "Deploy from a branch" runs as

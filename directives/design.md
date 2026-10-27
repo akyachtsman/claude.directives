@@ -581,8 +581,9 @@ Non-negotiable, whatever the palette:
 - Use `textContent` for DOM text from any backend or user input, never
   `innerHTML` (per `global.md`).
 
-The per-project contrast guardrail (`templates/scripts/check-contrast.js`, run in
-CI against `styles/tokens.css`) is **a floor, not a coverage report**: it measures
+The per-project contrast guardrail (`templates/scripts/check-contrast.js`,
+installed as `.github/scripts/check-contrast.js` for local runs such as `/design-intake`'s,
+with `.github/scripts/package.json` beside it, and run in CI against `styles/tokens.css`) is **a floor, not a coverage report**: it measures
 a hand-written list of token pairs, so a token used in a different role passes
 while rendering wrong. Every other text pair the house components draw is
 checked by hand at 4.5:1 whenever one of its tokens changes. This is the full

@@ -87,6 +87,13 @@ Check 6 learned the CommonJS manifest after the /refresh-repo pilots
 lockfile stays the cron kit's alone (refresh-stamp.sh). MEASURED 2026-10-13
 against the pre-change guard (100d6b4) via CHECK_REFRESH_DERIVATION_BIN: exactly
 the three CommonJS refusals fail; their accepting complements pass on both.
+
+Phase E of #460 step 4 (owner ruling, 2026-10-26): the guard's callers are
+directives/*.md alone, since a refresh installs no workflow or composite. Every
+other case sets DERIVATION_CALLER_GLOBS (FIXTURE_GLOBS) so its workflow and
+composite fixtures stay callers; the last case runs without it. MEASURED
+2026-10-26 against the guard at d7d6235 via CHECK_REFRESH_DERIVATION_BIN:
+exactly that case fails (it read the workflow template as a caller).
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -101,6 +108,7 @@ the three CommonJS refusals fail; their accepting complements pass on both.
 
 # Before any import: running the gate must leave no __pycache__/ beside the
 # local modules it imports (cases_lib.py and/or gh_yaml.py).
+import os
 import sys
 sys.dont_write_bytecode = True
 
@@ -204,8 +212,15 @@ def build(tmp, command_text, callers, stamp_text=KEEP, derive_text=KEEP, new_rep
     return root
 
 
+# The guard reads only directives/*.md since Phase E of #460 step 4; the
+# fixtures below are workflow and composite callers too, the shapes its readers
+# still parse, so the suite names all three globs.
+FIXTURE_GLOBS = "templates/workflows/*.yml templates/actions/*/action.yml directives/*.md"
+
+
 def run(root):
-    return run_cmd([sys.executable, GUARD], cwd=root)
+    return run_cmd([sys.executable, GUARD], cwd=root,
+                   env={**os.environ, "DERIVATION_CALLER_GLOBS": FIXTURE_GLOBS})
 
 
 CASES = Cases("check-refresh-derivation-cases")
@@ -691,5 +706,20 @@ case("an unreadable YAML caller is refused, not passed",
 case("no callers at all is refused, never a vacuous pass",
      callers={}, expect_exit=1,
      needle="pass vacuously")
+
+# Phase E of #460 step 4: without the fixture override the guard reads the
+# directives alone, so a workflow template -- a caller of a shared workflow,
+# never installed by a refresh -- is not a derivation input, even when it names
+# a script whose dependency it does not.
+with TemporaryDirectory() as tmp:
+    root = build(tmp, command_md(), {
+        "directives/test.md": "Run .github/scripts/a.js locally.\n",
+        "templates/workflows/cron.yml": "steps:\n  - run: node .github/scripts/needs-pkg.js\n",
+        "templates/scripts/needs-pkg.js": "module.exports = require('./sibling.js');\n",
+        "templates/scripts/sibling.js": "module.exports = 1;\n"})
+    rc, out = run_cmd([sys.executable, GUARD], cwd=root,
+                      env={k: v for k, v in os.environ.items() if k != "DERIVATION_CALLER_GLOBS"})
+CASES.expect("by default only directives/*.md are callers (Phase E): a workflow template is not read",
+             rc, out, 0, "1 referenced script(s) across 1 caller(s)")
 
 sys.exit(CASES.finish(f"{CASES.passed} pinned derivation shapes read correctly."))

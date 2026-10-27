@@ -404,23 +404,20 @@ const FLOW = [
   ['/new-repo', 'claude-settings.json', 'cop', 'copies', 'a', 'Also copy'],
   ['/new-repo', 'session-start.sh', 'cop', 'copies and makes executable', 'a', 'so copy'],
   ['/new-repo', 'styles/', 'cop', 'copies the design starter', 'a', 'Design starter'],
-  ['/new-repo', 'qa.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
-  ['/new-repo', 'qa-response.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
-  ['/new-repo', 'qa-live.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
-  // The scripts a caller names are DERIVED, never hand-listed (batch 5): /new-repo
-  // points at the derivation, and the static job's six ride with qa.yml.
-  ['/new-repo', '/refresh-repo', 'det', 'derives the scripts to copy with', 'a', 'Deriving the referenced-script set'],
-  ['/new-repo', 'check-ui-viewports.js', 'cop', 'copies', 'a', 'The scripts that serve the kit'],
-  ['/new-repo', 'browser-ladder.js', 'cop', 'copies', 'a', 'The scripts that serve the kit'],
-  ['cicd-setup.md', 'check-contrast.js', 'cop', 'copies', 'a', 'runs this script by path'],
-  ['/new-repo', 'secret-scan', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
-  ['/new-repo', 'ui-suite', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
+  // The callers (Phase E of #460 step 4): the composites and the scripts they
+  // run are read from this repo at the called commit, never copied.
+  ['/new-repo', 'qa.yml', 'cop', 'copies the caller', 'a', 'copy these files from'],
+  ['/new-repo', 'qa-response.yml', 'cop', 'copies the caller', 'a', 'copy these files from'],
+  ['/new-repo', 'qa-live.yml', 'cop', 'copies the caller', 'a', 'copy these files from'],
+  ['/new-repo', 'pages-deploy.yml', 'cop', 'copies the caller (Actions-source only)', 'a', 'copy these files from'],
+  // The scripts a directive names are DERIVED, never hand-listed (batch 5).
+  ['/new-repo', '/refresh-repo', 'det', 'derives the scripts to copy as', 'a', 'derivation `/refresh-repo` runs'],
+  ['/new-repo', 'browser-ladder.js', 'cop', 'copies, as a directive names it', 'a', 'DERIVE the set'],
+  ['/new-repo', 'package.json', 'cop', 'copies, as a directive names it', 'a', 'DERIVE the set'],
+  ['/new-repo', 'check-contrast.js', 'cop', 'copies, as a directive names it', 'a', 'DERIVE the set'],
   ['/new-repo', 'ui-tests/', 'cop', 'copies the kit', 'a', 'Install the Playwright kit'],
-  ['cicd-setup.md', 'notify-email.js', 'add', 'adds with cron-notify.yml', 'a', 'Install it with its scripts'],
-  ['cicd-setup.md', 'notify-task.js', 'add', 'adds with cron-notify.yml', 'a', 'Install it with its scripts'],
-  ['cicd-setup.md', 'package.json', 'add', 'adds with cron-notify.yml', 'a', 'Install it with its scripts'],
-  ['/new-repo', 'pages-deploy.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
-  ['cicd-setup.md', 'cron-notify.yml', 'add', 'adds when a scheduled task needs it', 'a', 'cp "$tmp/cron-notify.yml" .github/workflows/cron-notify.yml'],
+  ['cicd-setup.md', 'notify-task.js', 'add', 'adds with cron-notify.yml', 'a', '-o .github/scripts/notify-task.js'],
+  ['cicd-setup.md', 'cron-notify.yml', 'add', 'adds when a scheduled task needs it', 'a', '-o .github/workflows/cron-notify.yml'],
   ['CLAUDE-template.md', 'global.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'git.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'design.md', 'imp', 'imports'],
@@ -488,9 +485,9 @@ const FLOW = [
   ['ui-tester', 'ui-tests/', 'run', 'drives', 'a', 'Runnable source of truth'],
   // pr & review
   // The workflows run the kit: the arrow starts at the actor (Codex audit, #393).
-  ['qa.yml', 'ui-tests/', 'run', 'runs the kit in CI (tests-dir)', 'a', 'UI_TESTS_DIR'],
-  ['qa-live.yml', 'ui-tests/', 'run', 'runs the kit against the live site (tests-dir)', 'a', 'UI_TESTS_DIR'],
-  ['qa-response.yml', 'ui-tests/', 'run', 'runs the kit on demand (tests-dir)', 'a', 'UI_TESTS_DIR'],
+  ['qa.yml', 'ui-tests/', 'run', 'runs the kit in CI (tests-dir)', 'a', 'tests-dir:'],
+  ['qa-live.yml', 'ui-tests/', 'run', 'runs the kit against the live site (tests-dir)', 'a', 'tests-dir:'],
+  ['qa-response.yml', 'ui-tests/', 'run', 'runs the kit on demand (tests-dir)', 'a', 'tests-dir:'],
   // upkeep
   ['/refresh-repo', 'kit-defects.md', 'run', 'checks against', 'a', 'Fetch the list'],
   ['/refresh-repo', 'scripts/', 'run', 'runs Phase 3 (applied-check + stamp)', 'a', 'scripts/refresh-stamp.sh'],
@@ -516,6 +513,12 @@ for (const f of allWf) if (!stageOf.has(f)) fail(`workflow template not on the m
 const idByWfName = new Map(allWf.map(f => [wfName(f), f]));
 for (const f of allWf) {
   const src = readFileSync(f, 'utf8');
+  // A caller (Phase E of #460 step 4) runs its shared workflow at its pin.
+  for (const m of src.matchAll(/^\s*uses:\s*akyachtsman\/claude\.directives\/\.github\/workflows\/(shared-[\w-]+\.yml)@/gm)) {
+    const target = `.github/workflows/${m[1]}`;
+    if (!stageOf.has(target)) { fail(`${f} calls a shared workflow that is not on the map: ${m[1]}`); continue; }
+    derived.push([f, target, 'run', 'calls at its pin', 'a', [m[1]], 'uses: akyachtsman/claude.directives']);
+  }
   for (const m of src.matchAll(/^\s*-?\s*uses:\s*\.\/\.github\/actions\/([\w-]+)/gm)) {
     const target = `templates/actions/${m[1]}/`;
     if (!stageOf.has(target)) { fail(`${f} uses an action that is not on the map: ${m[1]}`); continue; }
@@ -572,14 +575,28 @@ const fileToNode = f => {
 {
   const toTemplate = d => d.replace(/^\.github\/scripts\/ui-tests(?=\/|$)/, 'templates/ui-tests')
     .replace(/^\.github\/scripts(?=\/|$)/, 'templates/scripts');
+  // The values `input` takes in the workflows that use the `action` composite.
+  // A shared workflow passes its own `${{ inputs.x }}`, which is resolved
+  // through every caller of it (Phase E of #460 step 4: the callers set it).
+  const shared = TRACKED.filter(f => /^\.github\/workflows\/shared-[\w-]+\.yml$/.test(f));
+  const valuesOf = (src, input) => [...src.matchAll(new RegExp(`^\\s*${input}:\\s*['"]?(\\$\\{\\{[^}]*\\}\\}|[^\\s'"]+)`, 'gm'))].map(m => m[1]);
   const passed = (action, input) => {
     const dirs = new Set();
-    for (const w of allWf) {
+    for (const w of [...allWf, ...shared]) {
       const src = readFileSync(w, 'utf8');
-      if (!src.includes(`./.github/actions/${action}`)) continue;
-      for (const m of src.matchAll(new RegExp(`^\\s*${input}:\\s*['"]?(\\$\\{\\{[^}]*\\}\\}|[^\\s'"]+)`, 'gm'))) {
-        const env = m[1].match(/^\$\{\{\s*env\.(\w+)\s*\}\}$/);
-        const val = env ? src.match(new RegExp(`^\\s*${env[1]}:\\s*['"]?([^\\s'"]+)`, 'm'))?.[1] : m[1];
+      if (!src.includes(`./.github/actions/${action}`) && !src.includes(`./.claude-directives/templates/actions/${action}`)) continue;
+      for (const v of valuesOf(src, input)) {
+        const env = v.match(/^\$\{\{\s*env\.(\w+)\s*\}\}$/);
+        const inp = v.match(/^\$\{\{\s*inputs\.([\w-]+)\s*\}\}$/);
+        if (inp) {
+          const name = w.split('/').pop();
+          for (const c of allWf) {
+            const csrc = readFileSync(c, 'utf8');
+            if (csrc.includes(`/.github/workflows/${name}@`)) for (const cv of valuesOf(csrc, inp[1])) if (!cv.startsWith('${{')) dirs.add(cv);
+          }
+          continue;
+        }
+        const val = env ? src.match(new RegExp(`^\\s*${env[1]}:\\s*['"]?([^\\s'"]+)`, 'm'))?.[1] : v;
         if (val) dirs.add(val);
       }
     }
@@ -627,10 +644,14 @@ for (const id of stageOf.keys()) {
   const retired = new Set(FLOW.filter(f => f[2] === 'rem').map(f => N(f[1])));
   for (const line of readFileSync(src, 'utf8').split('\n')) {
     const row = line.match(/^\| `(templates\/[^`]+)` \| `?([^|`]+)`? \| (.*)\|\s*$/);
-    if (!row || /^Never overwrite/.test(row[3].trim())) continue;
+    if (!row || /^Never overwrite/.test(row[3].trim()) || /^not installed/.test(row[2].trim())) continue;
+    // "only the scripts a directive names": the rest are read at the called commit.
+    const named = /only the scripts a directive names/.test(row[2])
+      ? id => ['global', 'git', 'design', 'test', 'data'].some(d => readFileSync(`directives/${d}.md`, 'utf8').includes(`.github/scripts/${id.split('/').pop()}`))
+      : () => true;
     const re = new RegExp('^' + row[1].replace(/[.]/g, '\\.').replace(/\/\*\*$/, '/\u0000')
       .replace(/<[^>]+>|\*/g, '[^/]+').replace('\u0000', '.*') + '$');
-    const hits = [...stageOf.keys()].filter(id => id.startsWith('templates/') && !retired.has(id)
+    const hits = [...stageOf.keys()].filter(id => id.startsWith('templates/') && !retired.has(id) && named(id)
       && (re.test(id) || (id.endsWith('/') && re.test(id + 'x'))));
     if (!hits.length) fail(`${src}: Phase 2 row ${row[1]} matches nothing on the map`);
     for (const id of hits) derived.push([src, id, 'ret', 're-syncs (Phase 2)', 'a', [row[1]], `| \`${row[1]}\``]);
@@ -717,9 +738,17 @@ for (const [a, b, k, w, s, q] of FLOW) add(N(a), N(b), k, w, s ?? 'a', true, nul
   // not enough: a later "runs" arrow reached secret-scan and the notify
   // scripts while the map never showed how they enter a project (Codex, #393).
   // The fill-in artifacts are exempt: a project reads them from upstream when
-  // it needs one; nothing copies them at bootstrap.
+  // it needs one; nothing copies them at bootstrap. So are the files a called
+  // workflow runs, directly or through a composite: the shared workflows read
+  // them from this repo at the called commit (Phase E of #460 step 4).
+  const atCall = new Set();
+  const runQ = [...stageOf.keys()].filter(id => delivery(id) === 'cal');
+  while (runQ.length) {
+    const n = runQ.shift();
+    for (const e of edges) if (e.a === n && e.kind === 'run' && !atCall.has(e.b)) { atCall.add(e.b); runQ.push(e.b); }
+  }
   for (const { p, cls } of exported) {
-    if (delivery(p) !== 'cop' || cls === 'artifact') continue;
+    if (delivery(p) !== 'cop' || cls === 'artifact' || atCall.has(p)) continue;
     if (!edges.some(e => e.b === p && ['cop', 'add', 'rem'].includes(e.kind))) {
       fail(`copied template with no copy into a project: ${labelOf(p)} — declare the copy that installs it, or retire it`);
     }

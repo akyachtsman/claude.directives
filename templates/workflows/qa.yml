@@ -1,34 +1,41 @@
-# qa.yml — Static checks + Playwright against a local server.
-# Copy to .github/workflows/qa.yml in your project, along with the composite
-# actions from templates/actions/ into .github/actions/ (secret-scan, ui-suite).
+# qa.yml — static checks + Playwright against a local server, on every PR to
+# main, every push to main and by hand. A CALLER: copy it to
+# .github/workflows/qa.yml. The checks run in claude.directives'
+# .github/workflows/shared-qa.yml at the release pinned below, with the
+# secret-scan and ui-suite composites and the shared scripts read from
+# claude.directives at that same commit, so the project carries none of them.
+# Pins, releases and what a project keeps: docs/standards/cicd-setup.md ->
+# Callers and pins.
 #
-# Jobs:
-#   static-checks — secret scan (composite) and contrast guardrail; the
-#                   blocking gate, runs on every trigger.
-#   ui-tests      — Playwright against a local server via the ui-suite
-#                   composite, on every trigger (skipped with a notice only
-#                   while the repo has no index.html yet and no build).
-#                   BLOCKING by default for the static/no-backend tier (the
-#                   suite runs fully against the bundled http-server);
-#                   set advisory-run: 'true' only as an explicit, temporary
-#                   opt-out — and flip it back once the blocking issue is fixed.
-#
-# Required setup:
+# What to set (every input, with its default: the `inputs:` of shared-qa.yml):
+#   - tests-dir: the directory holding the project's playwright.config.js.
+#   - CI-build opt-in only (global.md -> Hosting & Deployment): build-cmd and
+#     site-dir, the SAME values as pages-deploy.yml, and BUILD_PATHS below.
+#     Without the opt-in leave all three as shipped: no build, the repo root
+#     is served.
+#   - contrast-script: a project that added pairs to its own copy of
+#     check-contrast.js names that copy; without it the shipped pairs run.
 #   - TEST_AUTH_CREDENTIAL / TEST_AUTH_EMAIL repository secrets: set them only
 #     for a login that needs a credential from outside. Which gates need which,
 #     and when to leave both unset: docs/standards/cicd-setup.md -> Step 5.
-#   - Set UI_TESTS_DIR below to the path of your Playwright test directory
-#   - A project with the CI-build opt-in (global.md -> Hosting & Deployment)
-#     sets BUILD_CMD and SITE_DIR below to the SAME values as its
-#     pages-deploy.yml, and BUILD_PATHS to its build inputs (read by the
-#     toolkit's Pages edit reminder, not by this workflow). The browser job
-#     then runs the build and serves SITE_DIR, so it tests what is deployed.
-#     Without the opt-in
-#     leave all three as shipped: no build, the repo root is served. It serves
-#     the tree UNFILTERED (dotfiles and deny-listed paths included), so it
-#     tests the site's behaviour, not what pages-deploy.yml leaves out; it does
-#     refuse what that deploy refuses (a SITE_DIR outside the repository, or a
-#     symlink in the site), so a green PR cannot merge into a red deploy.
+#     Pass each by name: `secrets: inherit` is documented only inside one
+#     organization or enterprise.
+#   - Checks of the project's own (a path guard, unit tests) go in a SIBLING
+#     job that `qa` lists in `needs:`, so a red project check stops the suite:
+#
+#       project-checks:
+#         name: Project Checks
+#         runs-on: ubuntu-latest
+#         timeout-minutes: 5
+#         steps:
+#           - uses: actions/checkout@v7
+#           - run: node --test tests/
+#       qa:
+#         needs: [project-checks]
+#         uses: ...
+#
+# The called jobs' checks read "qa / Static Checks" and "qa / UI Tests (local
+# server)": a branch rule that requires checks by name names these.
 
 name: QA — Static + UI Tests
 
@@ -48,144 +55,25 @@ on:
   # the merge gate. See docs/standards/ci-triage.md → "CI never registered".
   workflow_dispatch:
 
-# Least privilege: these jobs only read the repo and run tests.
+# Least privilege: these jobs only read the repo and run tests. A called
+# workflow can narrow this, never widen it.
 permissions:
   contents: read
 
 env:
-  # Path to the directory containing playwright.config.js and package.json
-  UI_TESTS_DIR: .github/scripts/ui-tests
-  # CI-build opt-in only (header). BUILD_CMD runs from the repo root and writes
-  # SITE_DIR; empty BUILD_CMD means no build and SITE_DIR stays '.'.
-  BUILD_CMD: ''
-  SITE_DIR: '.'
   # Extended regex of the build INPUTS, e.g.
   # '^src/|^package(-lock)?\.json$|^tsconfig\.json$|^tailwind\.config\.'.
-  # Not read by this workflow: the toolkit's Pages edit reminder reads it to
-  # know which edits change the deployed site. Empty: no build.
+  # Not read by any workflow: the toolkit's Pages edit reminder reads it here
+  # to know which edits change the deployed site. Empty: no build.
   BUILD_PATHS: ''
 
 jobs:
-  static-checks:
-    name: Static Checks
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      # ── Secret scan (composite — single source of truth for the pattern) ────
-      - uses: ./.github/actions/secret-scan
-
-      # ── Contrast guardrail ───────────────────────────────────────────────────
-      # WCAG AA check against this project's design tokens — styles/tokens.css or
-      # css/tokens.css by default; elsewhere, append `--tokens <file>` (repeat it
-      # per theme file). With no stylesheet at all it exits with a notice (no
-      # failure) until /design-intake creates tokens.css; once the project has
-      # any CSS, a missing tokens file FAILS the check.
-      # CommonJS, like every .js under .github/scripts/: it runs only because
-      # .github/scripts/package.json declares "type": "commonjs". Without that
-      # manifest Node takes the module type from the ROOT package.json, and a
-      # Vite/Astro/SvelteKit root ("type": "module") kills this step with
-      # "require is not defined in ES module scope".
-      - name: Contrast guardrail (WCAG AA)
-        run: node .github/scripts/check-contrast.js
-
-  ui-tests:
-    name: UI Tests (local server)
-    needs: [static-checks]
-    runs-on: ubuntu-latest
-    # 120 is the fleet FLOOR for a ui-suite caller. Set HIGHER if your suite
-    # needs it, never lower, and raise it BEFORE adding projects. Why 120 (measurements, arithmetic, what it does NOT cover): the
-    # CALLER BOUND section of .github/actions/ui-suite/action.yml's header.
-    timeout-minutes: 120
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      # CI-build opt-in only: build exactly as pages-deploy.yml does and serve
-      # its output, so the suite tests what is deployed rather than the
-      # unbuilt tree. With BUILD_CMD empty these two steps are skipped.
-      - name: Setup Node (build)
-        if: env.BUILD_CMD != ''
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          # setup-node v5+ turns npm caching ON by itself when the root
-          # package.json names npm in `packageManager` (or devEngines), and then
-          # needs a lockfile. This step never cached under v4; keep it that way.
-          package-manager-cache: false
-
-      - name: Build
-        if: env.BUILD_CMD != ''
-        run: bash -eo pipefail -c "$BUILD_CMD"
-
-      # Refuse what pages-deploy.yml refuses, so a green PR cannot merge into a
-      # red deploy: a site directory resolving outside the repository, or a
-      # symlink in the site (the deploy publishes link TARGETS). A symlink fails
-      # where that deploy is installed (.github/workflows/pages-deploy.yml) or a
-      # build implies it (the opt-in is Actions-source); otherwise the repo is
-      # branch-source, where the managed build publishes links differently, so
-      # it only warns. Also exports the normalised directory ('' and '/'
-      # mean the repo root) to serve, as a step output. With no build and no
-      # index.html yet (a fresh repo) there is nothing to load: it skips the
-      # suite with a notice rather than hand Playwright a directory listing.
-      - name: Check the site directory
-        id: site
-        run: |
-          src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
-          if [ -z "$BUILD_CMD" ] && [ ! -f "$src/index.html" ]; then
-            echo "::notice::No index.html yet — skipping the browser suite."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ ! -f "$src/index.html" ]; then
-            echo "::error::$src/index.html is missing: nothing for the suite to load."
-            exit 1
-          fi
-          ws=$(realpath -e .)
-          real=$(realpath -e -- "$src")
-          case "$real/" in
-            "$ws"/*) ;;
-            *) echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the repository; pages-deploy.yml refuses it."; exit 1 ;;
-          esac
-          # Scanned from inside, so the excluded names apply only BELOW the root
-          # (a site directory that is itself called node_modules is still scanned).
-          links=$(cd "$real" && find . \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
-          if [ -n "$links" ] && { [ -n "$BUILD_CMD" ] || [ -f .github/workflows/pages-deploy.yml ]; }; then
-            echo "::error::symlinks in the site, which pages-deploy.yml refuses; replace them with real files:"
-            printf '%s\n' "$links"
-            exit 1
-          elif [ -n "$links" ]; then
-            echo "::warning::symlinks in the site; pages-deploy.yml (Actions-source) refuses them: $(printf '%s; ' "$links")"
-          fi
-          echo "root=$src" >> "$GITHUB_OUTPUT"
-
-      # advisory-run ships 'false': blocking is the default posture for the
-      # static/no-backend tier, where the suite runs fully against the bundled
-      # local server. A template that shipped 'true' handed every new project a
-      # UI suite whose failures show green. Set it 'true' ONLY in a project with
-      # a known open UI failure mid-fix, and flip it back as soon as that lands.
-      # Auth/backend-gated scenarios self-skip when no credential is available
-      # (TEST_AUTH_CREDENTIAL empty and the login form ships none), and
-      # qa-live.yml stays the live gate.
-      - uses: ./.github/actions/ui-suite
-        if: steps.site.outputs.skip != 'true'
-        with:
-          tests-dir: ${{ env.UI_TESTS_DIR }}
-          app-url: http://localhost:8080
-          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
-          test-auth-email: ${{ secrets.TEST_AUTH_EMAIL }}
-          # VARIABLES, not secrets: selectors and a URL substring, and a masked one
-          # is unreadable in a failure message. Empty keeps the windowed answer (#320)
-          # and S2 reading the gate clearing as success (#379).
-          test-auth-ready-selector: ${{ vars.TEST_AUTH_READY_SELECTOR }}
-          test-auth-ready-request: ${{ vars.TEST_AUTH_READY_REQUEST }}
-          test-auth-success-selector: ${{ vars.TEST_AUTH_SUCCESS_SELECTOR }}
-          artifact-name: playwright-results-local
-          app-pages: ${{ vars.APP_PAGES }}
-          start-local-server: 'true'
-          server-root: ${{ steps.site.outputs.root }}
-          advisory-run: 'false'
+  qa:
+    uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@v1
+    with:
+      tests-dir: .github/scripts/ui-tests
+      build-cmd: ''
+      site-dir: '.'
+    secrets:
+      TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+      TEST_AUTH_EMAIL: ${{ secrets.TEST_AUTH_EMAIL }}

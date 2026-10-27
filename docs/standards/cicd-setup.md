@@ -27,13 +27,64 @@ All three are standard (`global.md` → *Repo Structure Standard*). `pages-deplo
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
-Do not edit the templates in place in `claude.directives` — copy to the target project, then customize.
+Every workflow here is a **caller**: a short file in the project whose one job
+runs a shared workflow of `claude.directives` (#460 step 4). The project copies
+the caller from `templates/workflows/`, fills in its inputs, and carries nothing
+else of the CI: the composites and the scripts the shared workflows run come
+from `claude.directives` at the pinned release. Do not edit the templates in
+place in `claude.directives`; copy each caller to the target project, then fill
+it in.
+
+## Callers and pins
+
+A caller's job reads, for example,
+`uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@v1`. The
+part after `@` is the pin:
+
+- **`@v1`** (what every template ships) follows the latest `v1` release, so a
+  fix released in `claude.directives` reaches the project on its next run.
+- **`@vX.Y.Z`** stays on exactly that release until the project moves it.
+- **A commit SHA** stays on that commit. Use it when nobody but the project's
+  own owner may change what its CI runs: a caller on `@v1` passes its secrets
+  by name to whatever `v1` names, so whoever can move `v1` can run code that
+  receives them.
+
+A release is cut by the owner in `claude.directives` (Actions → Release → Run
+workflow), and a change that breaks an input or a secret starts `v2`, leaving
+`v1` where it is. `/refresh-repo` prints a `PIN:` line under each caller: whether
+the shared files changed between the commit the pin names and the head.
+
+**What the project keeps, and what it does not.**
+
+| The project keeps | Where it comes from instead |
+|---|---|
+| The callers in `.github/workflows/`, with their triggers, permissions, concurrency and inputs | — |
+| Its own checks, in a sibling job of the `qa` caller that `qa` lists in `needs:` | — |
+| The Playwright kit (`.github/scripts/ui-tests/`), Step 3 | — |
+| `.github/scripts/package.json` and `browser-ladder.js`, which `test.md` names for local runs | — |
+| `.github/scripts/check-contrast.js`, which `design.md` names for local runs (`/design-intake`) | CI runs the shared copy unless the caller's `contrast-script` names this one, which a project with added pairs does |
+| A scheduled task's `notify-task.js` (Step 9f) | `notify-email.js` is staged beside it at run time |
+| — | the `secret-scan` and `ui-suite` composites, `check-ui-viewports.js`, `notify-email.js`: read from `claude.directives` at the pinned commit |
+
+Settings that a project once edited into a workflow's `env:` are the caller's
+`with:` inputs, because `env` does not pass into a called workflow. Every input
+and its default is in the shared workflow's `inputs:`. Secrets go by name
+(`TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}`), never
+`secrets: inherit`, which GitHub documents only within one organization or
+enterprise. A called job's check is named `<caller job> / <job>`
+(`qa / Static Checks`), so a branch rule that requires checks by name names
+that form.
+
+`claude.directives` is public, so any repository can call it. If it ever turns
+private, every caller must be private too and pass a read-only token for it as
+the optional `DIRECTIVES_READ_TOKEN` secret (`TIME-SENSITIVE.md` in
+`claude.directives` records the GitHub facts behind this).
 
 
 ## Prerequisites
 
 - Target repo exists on GitHub with source files committed to `main`
-- `claude.directives` is accessible (public repo) for fetching templates
+- `claude.directives` is accessible (public repo) for fetching templates and for the callers to run
 - The app URL is known
 - If the app's login needs a credential supplied from outside, it is ready to
   store as the `TEST_AUTH_CREDENTIAL` repository secret — never in `CLAUDE.md`
@@ -44,12 +95,15 @@ Do not edit the templates in place in `claude.directives` — copy to the target
 
 ---
 
-## Step 1 — Copy workflow templates
+## Step 1 — Copy the workflow callers
 
-Copy the QA workflow templates from `claude.directives` into the target repo's `.github/workflows/` — `qa.yml` and `qa-live.yml` here, `qa-response.yml` just below, all three standard — **plus the two composite actions they reference** into `.github/actions/` (without them every qa run fails at step resolution):
+Copy the QA callers from `claude.directives` into the target repo's
+`.github/workflows/`: `qa.yml` and `qa-live.yml` here, `qa-response.yml` just
+below, all three standard. They need no composite or script beside them. Beside
+the scripts a directive names (below), every project carries the CommonJS manifest:
 
 ```bash
-mkdir -p .github/workflows .github/actions/secret-scan .github/actions/ui-suite
+mkdir -p .github/workflows .github/scripts
 
 # Fetch from the public template repo
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa.yml \
@@ -58,32 +112,13 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-live.yml \
   -o .github/workflows/qa-live.yml
 
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/secret-scan/action.yml \
-  -o .github/actions/secret-scan/action.yml
-
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/action.yml \
-  -o .github/actions/ui-suite/action.yml
-
-# The ui-suite composite runs a SIBLING script by path. Install it WITH the
-# YAML — the composite's first step is `python3
-# "$GITHUB_ACTION_PATH/validate-report-path.py"`, so without this file every UI
-# job dies at that step with "No such file".
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/validate-report-path.py \
-  -o .github/actions/ui-suite/validate-report-path.py
-
-# qa.yml's static job runs this script by path, so it installs WITH it —
-# without it the job fails at the missing file. What it guards is in
-# design.md → *Accessibility*.
-mkdir -p .github/scripts
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-contrast.js \
-  -o .github/scripts/check-contrast.js
-
 # The .js scripts in .github/scripts/ are CommonJS, and this manifest is what
 # says so: without it Node takes their module type from the ROOT package.json,
 # and a Vite/Astro/SvelteKit root ("type": "module") makes every one of them die
-# with "require is not defined in ES module scope". Installed with every
-# project, never only with the cron kit. An existing manifest is left alone —
-# Step 9f extends it — but it must not declare "type": "module".
+# with "require is not defined in ES module scope". The shared workflows bring
+# their own copy for the scripts they run; this one serves browser-ladder.js
+# (Step 3) and any CommonJS script of the project's. An existing manifest is
+# left alone, but it must not declare "type": "module".
 # It makes EVERY .js here CommonJS, the project's own included: an ES-module
 # .js of yours that ran before (with no manifest, Node detects ES syntax) dies
 # with "Cannot use import statement outside a module" the moment this lands.
@@ -95,6 +130,13 @@ if [ ! -f .github/scripts/package.json ]; then
     -o .github/scripts/package.json
 fi
 ```
+
+Then copy each script a directive names (`/new-repo` step 5 derives the set:
+today `browser-ladder.js` and `check-contrast.js`) from `templates/scripts/`, and
+fill in each caller's inputs (Step 2). A project that adds contrast pairs of its
+own (`design.md` → *Accessibility*) adds them to its
+`.github/scripts/check-contrast.js` and names that copy in the `qa` caller's
+`contrast-script` input.
 
 ⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
 Actions cache WRITE access is set by the triggering event, not the branch, and
@@ -113,7 +155,8 @@ procedure and there is deliberately **no manual warming step** here: the
 cache-hit path still runs `install-deps`, apt dominates it (`claude.prop`
 measured 114 MB of apt fetched on two runs with both caches hit), and warming
 bought ~15s. The measurement and its provenance live in one place — the
-composite's own comment at the cache step.
+composite's own comment at the cache step (`templates/actions/ui-suite/action.yml`
+in `claude.directives`).
 
 Event-driven QA dispatch hook — **part of the standard set**. Lets sessions and
 automations trigger QA via `repository_dispatch`:
@@ -127,9 +170,14 @@ Alternatively, have the active Claude Code session fetch and write these files v
 
 ---
 
-## Step 2 — Set UI_TESTS_DIR
+## Step 2 — Fill in the callers' inputs
 
-In each copied workflow file (`qa.yml`, `qa-live.yml`, `qa-response.yml`), confirm `UI_TESTS_DIR` points to the correct path for the project's Playwright test directory (default: `.github/scripts/ui-tests`). Edit if different.
+In each copied caller (`qa.yml`, `qa-live.yml`, `qa-response.yml`), confirm
+`tests-dir` names the project's Playwright test directory (default:
+`.github/scripts/ui-tests`). A project with the CI-build opt-in sets the `qa`
+caller's `build-cmd` and `site-dir` to the same values as its `pages-deploy.yml`
+(Step 9d-bis) and `BUILD_PATHS` to its build inputs. Everything else keeps its
+default until the project needs it; each caller's header lists what it takes.
 
 ---
 
@@ -156,27 +204,14 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
   -o .github/scripts/ui-tests/tests/lib/auth.js
 ```
 
-The kit's viewport gate ships alongside it. Install it **with** the `ui-suite`
-composite, not after: the composite names it by path, so an updated composite
-without it fails every UI job at step resolution. A project whose qa workflows
-are **callers** of claude.directives' shared workflows (#460 step 4) skips this
-install and the composites: the shared workflow stages the gate from its own
-checkout at run time (`docs/internal/shared-workflows.md` in claude.directives).
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-viewports.js \
-  -o .github/scripts/check-ui-viewports.js
-```
-
-It reads `UI_TESTS_DIR` (or `--tests-dir`, which the composite passes), so a
-project that moved its test directory needs no edit. It imports
+The kit's viewport gate does not need installing: the shared workflows stage
+`check-ui-viewports.js` from `claude.directives` for each run. It imports
 `playwright.config.js` and fails the build when the `projects` list does not
 declare a laptop, a tablet and a phone (`test.md` → *UI coverage gates*, fifth
 gate). Every failure mode is loud and separately coded — a missing config, a
 throwing config, an absent `node_modules` and zero projects each say so rather
 than passing quiet. Bands default to phone <768 / tablet 768–1023 / laptop
->=1024 and print on every run; `--tablet-min` / `--laptop-min` override them for
-a project whose breakpoints differ.
+>=1024 and print on every run.
 
 **A separate script, for a different question.** `browser-ladder.js` answers
 whether this machine can LAUNCH a browser at all — `test.md` calls for it when a
@@ -188,15 +223,14 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
   -o .github/scripts/browser-ladder.js
 ```
 
-Unlike the viewport gate above it reads no `UI_TESTS_DIR`, and no composite
-passes it arguments: point `--tests-dir` at the directory holding the kit's
+No workflow passes it arguments: point `--tests-dir` at the directory holding the kit's
 `node_modules` yourself. It grades on whether the browser launches, never on an
 install's exit code, and reports `CANNOT CHECK` rather than a ceiling when
 Playwright itself cannot be loaded.
 
-Then generate and **commit** the lockfile — required: `qa.yml`, `qa-live.yml`, and
-`qa-response.yml` key setup-node's npm cache to `package-lock.json`, and setup-node
-hard-fails ("Dependencies lock file is not found") without it:
+Then generate and **commit** the lockfile — required: the shared `qa`, `qa-live`
+and `qa-response` runs key setup-node's npm cache to the kit's `package-lock.json`,
+and setup-node hard-fails ("Dependencies lock file is not found") without it:
 
 ```bash
 cd .github/scripts/ui-tests && npm install && cd -
@@ -295,8 +329,9 @@ A `workflow_run` trigger names another workflow's `name:` as a string, and GitHu
 raises **no error** when that name matches nothing — the watcher simply never
 fires. No script checks this, so keep it by hand: rename a workflow and every
 watcher of it in the same PR (`docs/standards/automations.md` → *Watcher Rules*),
-and on Actions-source keep `"Pages Deploy"` on `qa-live.yml`'s watch list
-through every template refresh.
+and on Actions-source keep `"Pages Deploy"` on the `qa-live.yml` caller's watch
+list. The watch list lives in the caller, so no release of the shared workflows
+can drop it, and no release can add it either.
 
 ### 9c-ter — Job bounds
 
@@ -306,7 +341,8 @@ inconclusive rather than red, so nobody chases them. No script checks bounds;
 keep three rules by hand, per JOB rather than per repo:
 
 1. Every job declares `timeout-minutes` (except a job that `uses:` a reusable
-   workflow, where GitHub does not accept it).
+   workflow, where GitHub does not accept it: a caller's job takes its bound
+   from the shared workflow, whose UI jobs read the `ui-timeout-minutes` input).
 2. No bound `>= 360` — GitHub's default IS 360, so declaring it changes nothing
    while reading as protection.
 3. A job using the **ui-suite** composite sets `>= 120`; a job running
@@ -314,7 +350,7 @@ keep three rules by hand, per JOB rather than per repo:
 
 The 120 is a fleet-wide MINIMUM sized for the slow end, so being far under it is
 expected, not a reason for an exemption. Set HIGHER where your suite needs it,
-never lower. Its sizing record is the CALLER BOUND section of `templates/actions/ui-suite/action.yml`'s header:
+never lower, through `ui-timeout-minutes`. Its sizing record is the CALLER BOUND section of `templates/actions/ui-suite/action.yml`'s header:
 record that pointer, not the value, and where the format forces the literal, as
 `timeout-minutes` does, keep the pointer in the comment beside it (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*).
 
@@ -330,131 +366,38 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
   -o .github/workflows/pages-deploy.yml
 ```
 
-**What it does:** builds (only with the opt-in: `BUILD_CMD` and `SITE_DIR` in its
-header), copies the site minus every `.github/pages-deny.txt` path, publishes it,
+**What it does:** the caller runs `claude.directives`' `shared-pages-deploy.yml`,
+which builds (only with the opt-in: the caller's `build-cmd` and `site-dir`),
+copies the site minus every `.github/pages-deny.txt` path, publishes it,
 retries GitHub's transient publish failure from the same artifact, then asserts
 the root serves 200, each denied path 404, and each path in
-`.github/pages-public.txt` (internal-looking files that must stay public) 200. Its header lists the rest of the
-switch: a watcher named "Pages Deploy" in `qa-live.yml` (add, never replace;
-Step 9c-bis). Installed before the project's first page
-exists, it publishes nothing until `index.html` arrives: a run with no build and
-no Pages deployment ever skips its Publish job, and `qa-live.yml` skips its suite.
+`.github/pages-public.txt` (internal-looking files that must stay public) 200.
+The caller's header lists the rest of the switch: a watcher named "Pages Deploy"
+in `qa-live.yml` (add, never replace; Step 9c-bis). Installed before the
+project's first page exists, it publishes nothing until `index.html` arrives: a
+run with no build and no Pages deployment ever skips its Publish job, and
+`qa-live.yml` skips its suite.
 
 ### 9f — Scheduled-job notifications
 
-Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. The starter exits before its task body when the SMTP settings are unset, so a task that sends no email also deletes that guard (the `REQUIRED` check) when it replaces the body. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note). `.github/scripts/package.json` is normally already there from Step 1, where every project gets it for its `"type": "commonjs"`; the block below keeps it, adding `nodemailer` only when it is missing, rather than overwriting it. The block below stages the files but does not commit them. Before committing, set `on.schedule` in `cron-notify.yml` to the task's own cadence (the template's `cron: '0 7 * * *'` is a placeholder; add the DST guard if it needs a fixed local time, per `docs/guides/cron-email-notifications.md`) and replace the starter task body, then stage those edits again (`git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js`): the block's own `git add` captured the unedited templates:
+Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. The project carries two files: the `cron-notify.yml` caller and its own task, `.github/scripts/notify-task.js`. The shared workflow stages `notify-email.js` and its `package.json` beside the task for each run and installs `nodemailer` there, so the project commits no lockfile for it. The starter task exits before its body when the SMTP settings are unset, so a task that sends no email also deletes that guard (the `REQUIRED` check) when it replaces the body.
 
 ```bash
 mkdir -p .github/workflows .github/scripts
-# Preflight, before anything is written: never overwrite a file the project
-# already has, and never put the CommonJS scripts under an ES-module manifest.
-# The install below runs only when this passes (no `exit`: safe to paste).
-stop= tmp= t= has_nm=
-for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
-  if [ -e "$f" ]; then stop="$stop $f exists (diff it against the template by hand);"; fi
+for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js; do
+  [ -e "$f" ] && echo "STOP: $f exists; diff it against the template by hand"
 done
-if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
-  stop="$stop node and npm are required;"
-elif [ -f package.json ] && ! node -e 'process.exit(JSON.parse(require("fs").readFileSync("package.json", "utf8")).workspaces ? 1 : 0)' 2>/dev/null; then
-  # npm workspaces at the root can claim .github/scripts, and npm install then
-  # writes the ROOT lockfile (in this block and in cron-notify.yml alike).
-  stop="$stop the root package.json declares npm workspaces (or cannot be parsed); install the kit by hand;"
-elif [ -f .github/scripts/.npmrc ]; then
-  # A project .npmrc can change what npm installs and saves (lock-only,
-  # omit, save-dev...) here and in cron-notify.yml alike; rather than chase
-  # each setting, leave that configuration to a person.
-  stop="$stop .github/scripts/.npmrc exists (install the kit by hand);"
-elif [ -f .github/scripts/npm-shrinkwrap.json ]; then
-  # npm prefers a shrinkwrap over package-lock.json and may rewrite it, which
-  # this block neither backs up nor stages.
-  stop="$stop .github/scripts/npm-shrinkwrap.json exists (install the kit by hand);"
-elif [ -f .github/scripts/package.json ]; then
-  # Parse it: any JSON layout, not one spelling. A read or parse failure is a
-  # STOP of its own, never read as "not a module".
-  # Prints "<type> <yes|other|no>": whether nodemailer is already a regular
-  # dependency (its spec is kept), declared only as a dev/optional one (an
-  # install may omit those, so a person moves it), or absent (it is added).
-  if ! t=$(node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const o = Object.assign({}, j.devDependencies, j.optionalDependencies); console.log((j.type || "-") + " " + ("nodemailer" in (j.dependencies || {}) ? "yes" : "nodemailer" in o ? "other" : "no"))' .github/scripts/package.json 2>/dev/null); then
-    stop="$stop .github/scripts/package.json cannot be parsed;"
-  elif has_nm=${t##* }; [ "${t%% *}" = module ]; then
-    stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
-  elif [ "$has_nm" = other ]; then
-    stop="$stop .github/scripts/package.json declares nodemailer only as a dev/optional dependency (move it to dependencies);"
-  fi
-fi
-# git add fails on an ignored path only AFTER staging the paths before it, so
-# an ignored kit path is a STOP here rather than a half-staged index later.
-for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js \
-         .github/scripts/package.json .github/scripts/package-lock.json; do
-  if git check-ignore -q -- "$f"; then stop="$stop $f is git-ignored (unignore it first);"; fi
-done
-# Back up what npm may rewrite. A failed backup is a STOP: the rollback below
-# restores from these copies and must never delete an original it has none of.
-if [ -z "$stop" ]; then
-  tmp=$(mktemp -d) || tmp=
-  if [ -z "$tmp" ]; then stop="$stop no scratch directory (mktemp -d failed);"; fi
-fi
-if [ -z "$stop" ]; then
-  for f in package.json package-lock.json; do
-    if [ -f ".github/scripts/$f" ] && ! cp ".github/scripts/$f" "$tmp/orig-$f"; then
-      stop="$stop could not back up .github/scripts/$f;"
-    fi
-  done
-fi
-if [ -n "$stop" ]; then
-  echo "STOP, nothing written:$stop"
-  if [ -n "$tmp" ]; then rm -r -- "$tmp"; fi
-else
-  # All or nothing. Download into the scratch dir, copy into place only when
-  # every download succeeded, and on ANY failure put the tree back as it was
-  # (the preflight proved the three new files absent and backed up the rest),
-  # so a failed run stages nothing and can simply be re-run.
-  ok=
-  if curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml -o "$tmp/cron-notify.yml" \
-     && curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js -o "$tmp/notify-task.js" \
-     && curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js -o "$tmp/notify-email.js" \
-     && { [ -f "$tmp/orig-package.json" ] \
-          || curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json -o "$tmp/package.json"; }; then
-    cp "$tmp/cron-notify.yml" .github/workflows/cron-notify.yml \
-      && cp "$tmp/notify-task.js" "$tmp/notify-email.js" .github/scripts/ \
-      && { [ ! -f "$tmp/package.json" ] || cp "$tmp/package.json" .github/scripts/package.json; } \
-      && if [ -f "$tmp/orig-package.json" ]; then
-           # An existing manifest may serve other automation: add the
-           # dependency to it instead of overwriting it, and keep a
-           # nodemailer it already declares at its own version.
-           if [ "$has_nm" = yes ]; then (cd .github/scripts && npm install)
-           else (cd .github/scripts && npm install --save-prod nodemailer@^6.9.0); fi
-         else
-           (cd .github/scripts && npm install)   # cron-notify.yml's cache: step needs the lockfile
-         fi \
-      && [ -f .github/scripts/package-lock.json ] \
-      && node -e 'process.exit("nodemailer" in (JSON.parse(require("fs").readFileSync(".github/scripts/package.json", "utf8")).dependencies || {}) ? 0 : 1)' \
-      && (cd .github/scripts && node -e 'const path = require("path"); process.exit(require.resolve("nodemailer").startsWith(path.resolve("node_modules") + path.sep) ? 0 : 1)') \
-      && ok=1
-  fi
-  # Success means the lockfile exists (an .npmrc can switch it off),
-  # nodemailer is a regular dependency (--save-prod overrides an .npmrc
-  # save-dev/save-optional), node resolves it from .github/scripts/node_modules
-  # itself, not a parent folder (an .npmrc package-lock-only installs nothing,
-  # and a clean CI checkout has no root node_modules) AND the
-  # staging worked; anything less takes the rollback.
-  if [ -n "$ok" ] && git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
-       .github/scripts/notify-email.js .github/scripts/package.json \
-       .github/scripts/package-lock.json; then
-    echo "Installed and staged the scheduled-job kit"
-  else
-    rm -f .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js
-    for f in package.json package-lock.json; do
-      if [ -f "$tmp/orig-$f" ]; then cp "$tmp/orig-$f" ".github/scripts/$f"; else rm -f ".github/scripts/$f"; fi
-    done
-    echo "FAILED: a download, npm install, the lockfile or git add did not complete; the tree is restored and nothing is staged"
-  fi
-  rm -r -- "$tmp"
-fi
+[ -e .github/workflows/cron-notify.yml ] || curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
+  -o .github/workflows/cron-notify.yml
+[ -e .github/scripts/notify-task.js ] || curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js \
+  -o .github/scripts/notify-task.js
 ```
 
+Before committing, set `on.schedule` in `cron-notify.yml` to the task's own cadence (the template's `cron: '0 7 * * *'` is a placeholder; add the DST guard if it needs a fixed local time, per `docs/guides/cron-email-notifications.md`), replace the starter task body, and pass each secret the task reads in the caller's `secrets:`. The task sees only the names `shared-cron-notify.yml` passes (its header lists them); a task that needs another name is a finding for `claude.directives`, not a reason to copy the workflow.
+
 **What it does:** `cron-notify.yml` runs the project's scheduled task
-(`notify-task.js`) on its cron and sends email through `notify-email.js`. It
+(`notify-task.js`) on its cron, through the shared workflow, and sends email
+through `notify-email.js`. It
 does **not** surface its own failures: nothing in it opens an issue or comments
 when a run fails, so a failed run shows only as a red run in the Actions tab.
 GitHub's failed-workflow email (the one-time step at the top) is what reports it.
@@ -478,8 +421,8 @@ exempt your own account to keep it green (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` �
 
 Open the PR from the branch that now holds Steps 1–9. That PR is the test:
 
-- [ ] `QA — Static + UI Tests` runs on the PR and goes green — a red static job
-      at a missing file means a Step 1 script was skipped
+- [ ] `QA — Static + UI Tests` runs on the PR and goes green, and each shared
+      job's log prints `Shared files: akyachtsman/claude.directives@<sha>`
 - [ ] after the squash-merge, `QA — UI Tests (live)` runs once the deploy completes — `pages-build-deployment` on branch-source, `Pages Deploy` on Actions-source (before the first page exists, `Pages Deploy` publishes nothing and the live suite is skipped; Step 9d-bis)
 - [ ] `QA — Event-Driven Response` is visible in the Actions tab and ready for dispatch
 
@@ -492,7 +435,7 @@ Key values to customize after copying:
 | Value | What to substitute |
 |---|---|
 | `REPLACE_WITH_YOUR_APP_URL` (`playwright.config.js`) | Live app URL fallback when the `APP_URL` env var is unset — read by an ad-hoc local run only; `qa-live.yml` and `qa-response.yml` never fall back to it (Step 4) |
-| `UI_TESTS_DIR` (all qa workflows) | Path to your Playwright test directory (default: `.github/scripts/ui-tests`) |
+| `tests-dir` (each qa caller's input) | Path to your Playwright test directory (default: `.github/scripts/ui-tests`) |
 
 Required repository secrets:
 
@@ -509,7 +452,7 @@ Required repository variables:
 | `APP_URL` | Live GitHub Pages URL (e.g. `https://<username>.github.io/<repo>/`) |
 | `DB_URL` | Backend project/connection URL (safe in a variable; the client/anon key relies on RLS) — required by the project's scheduled data workflow, if any |
 
-Optional repository variables (the qa workflows pass them through the `ui-suite` composite; unset keeps the default behaviour):
+Optional repository variables (the shared qa workflows pass them through the `ui-suite` composite; unset keeps the default behaviour):
 
 | Variable | Purpose |
 |---|---|
@@ -522,22 +465,15 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 
 ## Verification Checklist
 
-A project whose qa workflows are **callers** of claude.directives' shared
-workflows (#460 step 4) reads the composite and viewport-gate lines below as
-"absent": the shared workflow reads both from claude.directives at the called
-commit. It keeps `check-contrast.js` only if its caller names it in
-`contrast-script`.
-
-- [ ] `.github/workflows/qa.yml` present and triggering on PRs to `main` and pushes to `main`
-- [ ] `.github/workflows/qa-live.yml` present and triggering after Pages deploy
-- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch — part of the standard set
-- [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present, `BUILD_CMD`/`SITE_DIR` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
-- [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT (Step 9f)
-- [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present (full copies; absent on a caller) — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
-- [ ] `.github/actions/ui-suite/validate-report-path.py` present (full copies; absent on a caller) — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
-- [ ] `.github/scripts/check-contrast.js` present — `qa.yml`'s static job runs it by path (Step 1); on a caller, only when `contrast-script` names it
+- [ ] `.github/workflows/qa.yml` present (a caller of `shared-qa.yml`) and triggering on PRs to `main` and pushes to `main`
+- [ ] `.github/workflows/qa-live.yml` present (a caller of `shared-qa-live.yml`) and triggering after Pages deploy
+- [ ] `.github/workflows/qa-response.yml` present (a caller of `shared-qa-response.yml`) and ready for dispatch — part of the standard set
+- [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present (a caller of `shared-pages-deploy.yml`), `build-cmd`/`site-dir` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
+- [ ] `.github/workflows/cron-notify.yml` present with `.github/scripts/notify-task.js` if the project has a scheduled task, both absent otherwise; `keepalive.yml` ABSENT (Step 9f)
+- [ ] every caller pinned `@v1`, `@vX.Y.Z` or a commit SHA, and passing its secrets by name
+- [ ] no `.github/actions/secret-scan/`, `.github/actions/ui-suite/` or `.github/scripts/check-ui-viewports.js`: the shared workflows read them from `claude.directives`, and a stale copy only misleads
+- [ ] `.github/scripts/package.json`, `browser-ladder.js` and `check-contrast.js` present (Step 1); the `qa` caller names `check-contrast.js` in `contrast-script` only when the project added pairs
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
-- [ ] `.github/scripts/check-ui-viewports.js` present (full copies; absent on a caller) — the `ui-suite` composite names it by path and every UI job fails at step resolution without it
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app has no login, or because its login ships a working credential in a visible, editable password field and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)

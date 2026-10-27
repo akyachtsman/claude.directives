@@ -1,61 +1,75 @@
-# shared-pages-deploy.yml — the callable version of
-# templates/workflows/pages-deploy.yml (#460 step 4, Phase A). The Actions-source
-# Pages deploy: build (optional) -> filter -> publish -> assert. Every rule in
-# the template's header holds here; read it there. A project calls this one
-# instead of carrying the copy:
-#
-#   name: Pages Deploy            # qa-live watches this name (W2)
-#   on:
-#     push:
-#       branches: [main]
-#     workflow_dispatch:
-#   permissions:
-#     contents: read
-#     deployments: read
-#     pages: write
-#     id-token: write
-#   concurrency:
-#     group: ${{ github.ref == 'refs/heads/main' && 'pages-deploy' || format('pages-deploy-offmain-{0}', github.run_id) }}
-#     cancel-in-progress: false
-#   jobs:
-#     deploy:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-pages-deploy.yml@v1
-#       with:
-#         build-cmd: ''
-#         site-dir: '.'
+# shared-pages-deploy.yml — the Actions-source GitHub Pages deploy: build
+# (optional) -> filter -> publish -> assert, called by a project's
+# .github/workflows/pages-deploy.yml (#460 step 4). The caller a project writes
+# is templates/workflows/pages-deploy.yml, pinned `@v1` (or `@vX.Y.Z`, or a
+# commit SHA); its header lists the install steps and the rest of the switch
+# (Settings, the deny-list, the qa-live watcher). A BRANCH-SOURCE project
+# installs neither file: there the push is the deploy and GitHub runs the
+# managed pages-build-deployment.
 #
 # What the caller keeps, and why:
 #   - `permissions`: a called workflow can only narrow the caller's token, so
 #     the caller grants the most any job here needs (deployments: read for the
 #     build job's bootstrap lookup; pages: write and id-token: write for the
 #     publish).
-#   - `concurrency`: the template's workflow-level rule (one deploy at a time,
-#     a running one never cancelled, a pending one replaced; off-main runs in
-#     a group of their own), unchanged.
+#   - `concurrency`: one deploy at a time, a running one never cancelled, a
+#     pending one replaced; off-main runs in a group of their own. The
+#     reasoning is beside it in templates/workflows/pages-deploy.yml.
 #   - .github/pages-deny.txt and .github/pages-public.txt: project files, read
-#     from the caller's checkout as before.
-# BUILD_CMD, SITE_DIR and INCLUDE_HIDDEN_FILES are inputs, because `env` does
+#     from the caller's checkout.
+#
+# BUILD (opt-in only — global.md -> Hosting & Deployment). build-cmd is the
+# build recorded on the `Build:` bullet in the project CLAUDE.md, run from the
+# repo root (`npm ci && npm run build`, say); site-dir is the directory it
+# writes. No build: build-cmd empty and site-dir `.` — the repo root, filtered.
+# Whatever tests or watches the site must act on site-dir, never the repo root.
+#
+# FILTER. Each deny-list line is a literal path (no glob), removed from the
+# copy. Always dropped, whatever the deny-list says: .git and .github at any depth,
+# node_modules, and every dotfile or dot-directory (upload-pages-artifact
+# excludes them; a project serving one, .well-known say, sets
+# include-hidden-files: true and denies its secrets by name).
+# A symlink anywhere in the copy fails the run: the upload follows links, so
+# one would publish its target past the deny-list.
+#
+# RETRY. GitHub's own publish step sometimes fails with a transient "Deployment
+# failed, try again later". The deploy job retries a FAST failure twice from the
+# same artifact, so nothing is rebuilt. A failure after ~8 minutes or more is
+# most likely deploy-pages' own timeout and is not retried: GitHub may still be
+# settling that deployment.
+#
+# ASSERT. Only once the live site serves this run's pages-deploy-marker.txt (a
+# file of that name in the site is overwritten), so no probe can be answered by
+# the previous deployment: the root serves 200; each deny-listed path serves 404
+# on two probes 30s apart; each path in .github/pages-public.txt
+# (internal-looking files that must stay public, same format) serves 200.
+# Redirects are not followed; paths are percent-encoded and cache-busted. A
+# failure fails this run, where the bad filter was made. The
+# probes are anonymous, so a PRIVATE Pages site (Enterprise Cloud only) reads
+# as down: such a project replaces them with authenticated ones.
+#
+# build-cmd, site-dir and include-hidden-files are inputs, because `env` does
 # not pass into a called workflow. This file needs no shared scripts, so it
 # fetches nothing from this repo. In the caller's run the publish job shows as
 # "<caller job> / Publish"; shared-qa-live.yml reads both forms.
-#
-# Fix a defect in BOTH this file and the template until the templates become
-# callers (Phase E). How the callable workflows differ from their templates:
+# Rules and reasoning: docs/standards/automations.md -> Watcher Rules (W2),
+# docs/standards/hosting-mechanics.md. How a called workflow works:
 # docs/internal/shared-workflows.md.
+
 name: Shared Pages Deploy
 on:
   workflow_call:
     inputs:
       build-cmd:
-        description: CI-build opt-in only. The build recorded on the project CLAUDE.md's `Build:` bullet, run from the repo root; empty means no build (BUILD_CMD in the template).
+        description: CI-build opt-in only. The build recorded on the project CLAUDE.md's `Build:` bullet, run from the repo root; empty means no build.
         type: string
         default: ''
       site-dir:
-        description: The directory the build writes, or '.' for the repo root, filtered (SITE_DIR in the template).
+        description: The directory the build writes, or '.' for the repo root, filtered.
         type: string
         default: '.'
       include-hidden-files:
-        description: Publish dotfiles (a .well-known, say); deny their secrets by name. upload-pages-artifact's include-hidden-files (INCLUDE_HIDDEN_FILES in the template).
+        description: Publish dotfiles (a .well-known, say); deny their secrets by name. upload-pages-artifact's include-hidden-files.
         type: boolean
         default: false
 
@@ -268,7 +282,7 @@ jobs:
               fi
               case "/$p" in
                 */.*) if [ "${INCLUDE_HIDDEN_FILES:-false}" != "true" ]; then
-                        echo "::error::pages-public.txt lists [$p], a hidden path the upload drops; set INCLUDE_HIDDEN_FILES to 'true' to publish it."
+                        echo "::error::pages-public.txt lists [$p], a hidden path the upload drops; set include-hidden-files: true in the caller to publish it."
                         exit 1
                       fi ;;
               esac

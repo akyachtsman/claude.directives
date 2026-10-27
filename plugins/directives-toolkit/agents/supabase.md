@@ -89,6 +89,11 @@ relax its security rules to make something work.
   `select tablename, policyname, cmd, roles from pg_policies ...`).
 - Run `get_advisors` for security findings (missing RLS, exposed tables) and
   surface anything it reports.
+- Run `data.md` → *Secret Columns* on every column that holds a secret: which
+  roles inside the same tenant can read it (`information_schema.column_privileges`,
+  views, `SECURITY DEFINER` functions), whether a named permission locks it, and
+  whether each "tighten later" note is on the accepted-risks list. The advisors
+  do not check role-by-role reads inside a tenant.
 
 ### Run the project's scheduled data script manually
 - Find the scheduled data script path (if the project has one) in `CLAUDE.md`. Run it with `Bash`, supplying
@@ -139,6 +144,7 @@ Use when relevant and available:
 
 ## RLS Audit
 - Per table: RLS enabled? policies present? <table → enabled / policies / advisor findings>
+- Secret columns: <table.column → roles that can read it / lock (column grant + definer fn) / accepted-risk entry or FINDING>
 
 ## Configuration
 - DB_SERVICE_KEY (secret): Present / Missing — placement correct? Yes / No

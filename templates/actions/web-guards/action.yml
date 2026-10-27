@@ -1,0 +1,89 @@
+# The web guards — three checks every project's QA runs, ported from
+# apfp.claude's CI (owner ruling, 2026-10-27):
+#
+#   native-dialog — the site never calls the browser's own confirm(), alert()
+#                   or prompt() (design.md -> 9. Confirmations).
+#   escape-sink   — an HTML-escaped value never goes into a text sink
+#                   (textContent, .value, setAttribute('title'), a dialog),
+#                   where the person would read the entity codes.
+#   audit-deps    — `npm audit` of every npm dependency tree in the repository,
+#                   failing on an advisory at or above audit-level.
+#
+# Read by .github/workflows/shared-qa.yml from claude.directives at the called
+# commit (`uses: ./.claude-directives/templates/actions/web-guards`); a project
+# never copies it. Each script's header says what it reads and why, and
+# .github/scripts/check-web-guards-cases.js in claude.directives proves each
+# catch and each clean twin.
+#
+# Every guard can be turned off by its own input, and a file a code guard must
+# leave alone (a vendored library) is named in guard-skip. Every step runs even
+# when an earlier one failed, so one run names every finding.
+name: 'Web guards'
+description: Native-dialog, escape-sink and dependency-audit checks.
+inputs:
+  site-dir:
+    description: The directory whose .js, .mjs and .html files the code guards read; '.' is the repo root.
+    default: '.'
+  native-dialog:
+    description: "'true' runs the native-dialog guard."
+    default: 'true'
+  escape-sink:
+    description: "'true' runs the escape-sink guard."
+    default: 'true'
+  audit-deps:
+    description: "'true' runs the dependency audit."
+    default: 'true'
+  guard-skip:
+    description: Paths (files or directories, from the repo root) the code guards leave alone, one per line. Prefix `native-dialog:` or `escape-sink:` for one guard only. An entry naming nothing fails.
+    default: ''
+  text-sinks:
+    description: The project's own functions whose arguments are shown as plain text (its own dialog, say), by name, for the escape-sink guard. The house dialogs are included already.
+    default: ''
+  audit-level:
+    description: The lowest npm advisory severity that fails (low, moderate, high, critical).
+    default: 'high'
+  audit-skip:
+    description: Manifests the audit leaves out (a directory or its package.json), one per line. An entry naming nothing fails.
+    default: ''
+runs:
+  using: composite
+  steps:
+    # The code guards parse JavaScript with acorn and pages with parse5, and
+    # resolve names with eslint-scope, pinned with their lockfile in this
+    # directory. Installed here, never in the caller's tree.
+    - name: Install the guards' parser
+      if: inputs.native-dialog == 'true' || inputs.escape-sink == 'true'
+      shell: bash
+      env:
+        GUARDS_DIR: ${{ github.action_path }}
+      run: npm ci --ignore-scripts --no-audit --no-fund --prefix "$GUARDS_DIR"
+
+    - name: Native dialog guard
+      if: ${{ !cancelled() && inputs.native-dialog == 'true' }}
+      shell: bash
+      env:
+        GUARDS_DIR: ${{ github.action_path }}
+        SITE_DIR: ${{ inputs.site-dir }}
+        GUARD_SKIP: ${{ inputs.guard-skip }}
+      run: node "$GUARDS_DIR/native-dialog-guard.mjs"
+
+    - name: Escape-sink guard
+      if: ${{ !cancelled() && inputs.escape-sink == 'true' }}
+      shell: bash
+      env:
+        GUARDS_DIR: ${{ github.action_path }}
+        SITE_DIR: ${{ inputs.site-dir }}
+        GUARD_SKIP: ${{ inputs.guard-skip }}
+        TEXT_SINKS: ${{ inputs.text-sinks }}
+      run: node "$GUARDS_DIR/escape-sink-guard.mjs"
+
+    # Needs the npm registry, as every `npm audit` does. A registry that does
+    # not answer fails this step as "did not run", never as clean.
+    - name: Dependency audit
+      if: ${{ !cancelled() && inputs.audit-deps == 'true' }}
+      shell: bash
+      env:
+        GUARDS_DIR: ${{ github.action_path }}
+        AUDIT_LEVEL: ${{ inputs.audit-level }}
+        AUDIT_SKIP: ${{ inputs.audit-skip }}
+      run: node "$GUARDS_DIR/audit-deps.mjs"

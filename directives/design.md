@@ -317,7 +317,8 @@ Every screen uses this for anything a person can put away and get back.
   anything that may have changed once the answer comes back.
 - **No native `confirm()`, `alert()` or `prompt()` anywhere:** they look
   different on every browser, cannot be styled, and break the person's place on
-  a phone. A project may enforce this with a guard in CI.
+  a phone. Every project's QA fails one (the native-dialog guard,
+  `docs/standards/cicd-setup.md` → *Step 2*).
 - Ask only when the act loses something or is hard to reverse (archive, delete,
   revoke, send to everyone, lock down). Never confirm Restore, Save or Cancel.
 - The title is a question naming the act and the thing: "Archive Walk-in
@@ -579,7 +580,10 @@ Non-negotiable, whatever the palette:
 - Honor `prefers-reduced-motion`.
 - Status is never conveyed by colour alone.
 - Use `textContent` for DOM text from any backend or user input, never
-  `innerHTML` (per `global.md`).
+  `innerHTML` (per `global.md`). And never HTML-escape what goes into
+  `textContent`, a `title`, a field's value or a dialog: it is shown as given,
+  so the person reads `&amp;`. Escape only for `innerHTML`; every project's QA
+  fails the other (the escape-sink guard).
 
 The per-project contrast guardrail (`templates/scripts/check-contrast.js`,
 installed as `.github/scripts/check-contrast.js` for local runs such as `/design-intake`'s,

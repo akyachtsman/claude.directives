@@ -83,6 +83,37 @@ write policies instead of this.
   brute-forceable through the login function, public objects reachable by exact
   URL). RLS cannot rate-limit — say so rather than pretend.
 
+## Secret Columns (owner ruling, 2026-10-27, from the APFP project)
+A row policy decides *which rows* a caller reads, never *which columns*: a secret
+kept in an ordinary column is readable by every role that can read its row. An
+audit that looks only for cross-tenant leaks never sees that (APFP: every staff
+role in a branch could read suppliers' website passwords). So every security
+audit of a project's backend runs these four checks, and so does any change that
+adds a column holding a secret, before it merges. A project with no backend
+records N/A.
+1. **List every secret column** — passwords, logins for outside services, API
+   keys, tokens, PINs, account numbers: anything that grants access or names a
+   financial account. Include columns added since the last audit.
+2. **Check every reader inside the tenant, not only across tenants.** For each
+   secret column, name which roles in the same tenant and branch (whatever scope
+   the app partitions by) can read it, through every path: direct table reads,
+   views and functions/RPCs. Test as the lowest role, not only the owner. A
+   Postgres view runs as its owner unless `security_invoker` is set, and a
+   `SECURITY DEFINER` function reads past every grant and policy, so a lock on
+   the table does not cover either one.
+3. **Lock each one behind a named permission** — a column-level grant that leaves
+   the secret out, plus a `SECURITY DEFINER` function that returns it only to
+   holders of that permission, for their own scope (the shape *Client Auth
+   Pattern* uses for the credential column; on another backend, its equivalent).
+   A row policy alone is never the lock: it cannot hide one column of a row it
+   lets through.
+4. **A "readable by all, tighten later" note fails the audit unless it is on the
+   accepted-risks list.** Search code, migrations and comments for any deferral
+   of tightening ("for now", "if the threat model changes", a TODO beside a grant
+   or policy). Each one is either fixed or recorded in the project CLAUDE.md
+   security-constraints section (*Record accepted residuals* above). A deferral
+   that lives only in a comment is a finding, not an accepted risk.
+
 ## Reversible-by-Design Backend Changes
 Every Supabase change must be undoable by a later session with no memory of this
 one:

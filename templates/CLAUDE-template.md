@@ -44,6 +44,7 @@ recorded here with its date. It lives in:
 
 ## Project-Specific Security Constraints
 - [List any accepted security trade-offs, e.g. client-side token usage]
+- [List every "readable by all, tighten later" deferral here, or the security audit fails (`data.md` → *Secret Columns*)]
 
 ## Project-Specific Coding Standards
 - [Add project-specific rules here]

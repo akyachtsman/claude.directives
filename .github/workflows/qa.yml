@@ -213,6 +213,30 @@ jobs:
       - name: Check the contrast guardrail reads token files correctly
         run: node .github/scripts/check-contrast-cases.js
 
+      # The web guards (templates/actions/web-guards/: native dialogs, escaped
+      # text in a text sink, npm audit) run in every project through
+      # shared-qa.yml, against code this repo never holds, so a guard that
+      # stopped catching what it claims would report clean there and nowhere
+      # else. The cases pair each catch with a clean twin, and drive the audit
+      # with a fake npm, so they need no registry. The parser installs from the
+      # lockfile beside the guards, as the composite installs it.
+      - name: Install the web guards' parser
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: templates/actions/web-guards
+
+      - name: Check the web guards catch what they claim
+        run: node .github/scripts/check-web-guards-cases.js
+
+      # Self-application: this repo's own pages and the house script obey the
+      # rules the guards hold every project to. The audit runs on this repo in
+      # the Shared QA self-test job, through the composite itself.
+      - name: Web guards on this repo's own browser code
+        run: |
+          node templates/actions/web-guards/native-dialog-guard.mjs
+          node templates/actions/web-guards/escape-sink-guard.mjs
+        env:
+          SITE_DIR: .
+
       # check-claims was the last guard here without its own guard, and the one
       # that grew fastest — 24 review rounds on #336. Two of its override checks
       # were measured fail-open: forcing `exercises` true, and never invoking the

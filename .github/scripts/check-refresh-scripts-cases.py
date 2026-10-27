@@ -188,7 +188,10 @@ counts a directory record whose `local` is stale. MEASURED against the scripts
 at f874ead, each swapped in alone: REFRESH_STAMP_BIN -> 5 (the hint's local,
 the no-local record, the edit, the new local printed, the untracked addition);
 REFRESH_DRIFT_BIN -> 5 (the three counting RE-RECORD cases, the names, and the
-drift-kept count, whose wording changed).
+drift-kept count, whose wording changed). Round 2 (Codex, #492): a symlink is
+counted as git records it, mode 120000 and its link text. MEASURED:
+REFRESH_LIB_BIN = the 47add7d lib fails the added-link case and the record
+that binds the linked tree.
 SAME-DAY NO-CHANGE STAMP (claude.prop; #460's batch list). On the day the sha
 was stamped, a rewrite is byte-identical too, so the no-delta case also checks
 the inode and mtime. MEASURED: the new stamp with its unchanged branch made to
@@ -778,6 +781,29 @@ check("stamp: ...and the refusal prints the new local tree",
 (r / ".github/scripts/ui-tests/tests/lib/extra.js").write_text("// an untracked addition\n", encoding="utf-8")
 run(r, "refresh-delta.sh")
 expect("stamp: an untracked file added under a declined directory re-asks too",
+       run(r, "refresh-stamp.sh"), 1, "tests/lib/fixtures.js differs", absent="KEPT:")
+# A symlink counts as git records it: its link text, not its target (Codex,
+# #492). Read through, a link added or retargeted changed nothing.
+(r / ".github/scripts/ui-tests/tests/lib/extra.js").unlink()
+for t in ("shared-a", "shared-b"):
+    (r / t).mkdir()
+    (r / t / "h.js").write_text("// same helper\n", encoding="utf-8")
+link = r / ".github/scripts/ui-tests/tests/lib/shared"
+link.symlink_to("../../../../../shared-a")
+run(r, "refresh-delta.sh")
+expect("stamp: a symlink added under a declined directory re-asks (Codex, #492)",
+       run(r, "refresh-stamp.sh"), 1, "tests/lib/fixtures.js differs", absent="KEPT:")
+git(r, "add", "-A"); git(r, "commit", "-q", "-m", "link")
+linked_tree = git(r, "rev-parse", "HEAD:.github/scripts/ui-tests/tests/lib")
+set_kept(r, ".github/scripts/ui-tests/tests/lib/",
+         {"tree": LIB_TREE, "local": linked_tree, "reason": "the project's own helpers"})
+run(r, "refresh-delta.sh")
+expect("stamp: ...its local tree is git's, so a record of it binds",
+       run(r, "refresh-stamp.sh"), 0, "(directory tests/lib/) the project's own helpers")
+link.unlink()
+link.symlink_to("../../../../../shared-b")
+run(r, "refresh-delta.sh")
+expect("stamp: ...and retargeting it re-asks, though both targets hold the same files",
        run(r, "refresh-stamp.sh"), 1, "tests/lib/fixtures.js differs", absent="KEPT:")
 
 # ---- items 5-7: drift at the pin, STALE vs CUSTOM, modes ----------------------

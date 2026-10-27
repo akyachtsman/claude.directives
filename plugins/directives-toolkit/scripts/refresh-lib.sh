@@ -150,7 +150,8 @@ refresh_local_mode() {
 
 # refresh_local_tree <dir>: the git tree id of what is on disk under <dir> --
 # every tracked or untracked, not ignored file, at its bytes (--no-filters) and
-# its refresh_local_mode -- or `absent` when it holds no file. A refresh_kept
+# its refresh_local_mode, and every symlink as git records one -- or `absent`
+# when it holds none. A refresh_kept
 # record for a kit DIRECTORY binds this beside the upstream `tree`, as a file
 # record binds `local` beside `blob`, so a later edit under a declined
 # directory re-asks. It once bound the upstream tree alone, and a project that
@@ -165,6 +166,14 @@ refresh_local_tree() {
   if mkdir "$tmp/objects" \
      && git --literal-pathspecs ls-files -z --cached --others --exclude-standard -- "$1/" >"$tmp/list" \
      && while IFS= read -r -d '' f; do
+          # A symlink is git's: mode 120000 and its link text, never its target
+          # (Codex, #492): read through, a link added or retargeted under a
+          # declined directory changed nothing here.
+          if [ -L "$f" ]; then
+            b=$(printf '%s' "$(readlink -- "$f")" | git hash-object --stdin) || break
+            printf '120000 %s\t%s\0' "$b" "${f#"$1"/}"
+            continue
+          fi
           [ -f "$f" ] || continue   # a tracked file deleted on disk is not there
           b=$(git hash-object --no-filters -- "$f") || break
           printf '%s %s\t%s\0' "$(refresh_local_mode "$f")" "$b" "${f#"$1"/}"

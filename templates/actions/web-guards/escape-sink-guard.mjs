@@ -32,7 +32,8 @@
 // comment-stripped text, so a sink's arguments are exactly its arguments (a
 // House.confirm(...).then(...) callback that escapes for innerHTML is not
 // inside the dialog's text), and a function's body is exactly its body, with
-// no clipping at the next declaration. A site with no escaper passes with a
+// no clipping at the next declaration. An escaper is matched with its owner
+// (`Html.escape` is not `CSS.escape`). A site with no escaper passes with a
 // notice: with no escaper there is nothing to double-encode. The house dialogs
 // and messages are sinks by default; TEXT_SINKS adds a project's own
 // (apfp.claude's askConfirm, say) by name.
@@ -62,10 +63,37 @@ const isHouse = c => c.type === 'MemberExpression' && c.object.type === 'Identif
  * function with a statement body: a callback that does its own work is not the
  * value being shown. An expression-bodied arrow (`xs.map(x => esc(x))`) is part
  * of the value, so it is read. */
+/* The dotted path a callee names (`esc`, `Html.escape`, `App.util.esc`), or
+ * null when its receiver is not a plain name (`this.esc`, `a().esc`). */
+const dotted = c => {
+  if (c.type === 'ChainExpression') c = c.expression;
+  if (c.type === 'Identifier') return c.name;
+  if (c.type === 'MemberExpression' && !c.computed && c.property.type === 'Identifier') {
+    const o = dotted(c.object);
+    return o ? `${o}.${c.property.name}` : null;
+  }
+  return null;
+};
+
+/* Does this callee call a derived escaper? An escaper is keyed by what names it:
+ * `esc`, `Html.escape`, or `*.escape` for a method whose owner has no name.
+ * A call keeps its receiver, so a derived `Html.escape` never makes
+ * `CSS.escape(id)` an escaper call (Codex, #493). A receiver that is not a
+ * plain name (`this.escape`) can be any owner, so it matches any key ending
+ * in that method. */
+function isEscaperCall(callee, escapers) {
+  if (callee.type === 'ChainExpression') callee = callee.expression;
+  if (callee.type === 'Identifier') return escapers.has(callee.name);
+  if (callee.type !== 'MemberExpression' || callee.computed || callee.property.type !== 'Identifier') return false;
+  const prop = callee.property.name, path = dotted(callee);
+  if (path) return escapers.has(path) || escapers.has('*.' + prop);
+  return [...escapers].some(k => k === '*.' + prop || k.endsWith('.' + prop));
+}
+
 function escaperCalls(node, names, out = []) {
   if (!node) return out;
   if (isFn(node) && node.body.type === 'BlockStatement') return out;
-  if (node.type === 'CallExpression' && names.has(calleeName(node.callee))) out.push(node);
+  if (node.type === 'CallExpression' && isEscaperCall(node.callee, names)) out.push(node);
   for (const k of kids(node)) escaperCalls(k, names, out);
   return out;
 }
@@ -75,20 +103,37 @@ function escaperCalls(node, names, out = []) {
  * property holding a function, an object or class method, an assignment of a
  * function to a name or a member. */
 function namedFunctions(ast, out) {
-  const visit = n => {
+  // The name of what holds an object or class: `const Html = {…}`,
+  // `App.util = {…}`, `class Html {…}`; null when nothing names it.
+  const ownerOf = (node, parent) => {
+    if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
+      if (node.id) return node.id.name;
+    }
+    if (parent && parent.type === 'VariableDeclarator' && parent.init === node && parent.id.type === 'Identifier') return parent.id.name;
+    if (parent && parent.type === 'AssignmentExpression' && parent.right === node) return dotted(parent.left);
+    return null;
+  };
+  const visit = (n, owners) => {
     if (n.type === 'FunctionDeclaration' && n.id) out.push({ name: n.id.name, node: n });
     else if (n.type === 'VariableDeclarator' && n.id.type === 'Identifier' && isFn(n.init)) out.push({ name: n.id.name, node: n.init });
     else if ((n.type === 'Property' || n.type === 'MethodDefinition' || n.type === 'PropertyDefinition')
              && !n.computed && isFn(n.value)) {
       const k = n.key.type === 'Identifier' ? n.key.name : n.key.type === 'Literal' ? String(n.key.value) : null;
-      if (k) out.push({ name: k, node: n.value });
+      // An object's method, or a class's STATIC one, is called on the owner's
+      // name; an instance method is called on an instance, which has none.
+      const owner = n.type === 'Property' || n.static ? owners.at(-1) : null;
+      if (k) out.push({ name: `${owner || '*'}.${k}`, node: n.value });
     } else if (n.type === 'AssignmentExpression' && isFn(n.right)) {
-      const k = calleeName(n.left);
+      const k = dotted(n.left) || (n.left.type === 'MemberExpression' && !n.left.computed ? '*.' + n.left.property.name : null);
       if (k) out.push({ name: k, node: n.right });
     }
-    for (const k of kids(n)) visit(k);
+    for (const c of kids(n)) {
+      const holder = c.type === 'ObjectExpression' || c.type === 'ClassExpression' || c.type === 'ClassDeclaration';
+      // A function's body starts over: an object built inside it is not its owner's.
+      visit(c, holder ? [...owners, ownerOf(c, n)] : isFn(c) ? [] : owners);
+    }
   };
-  visit(ast);
+  visit(ast, []);
   return out;
 }
 
@@ -241,7 +286,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error('Fix the SINK, not the escape. A file that must keep one: name it in guard-skip as escape-sink:<path>.');
       process.exit(1);
     } else {
-      console.log(`escape-sink-guard: clean (${files} files under ${siteDir}; escapers derived: ${[...escapers].sort().join(', ')}).`);
+      console.log(`escape-sink-guard: clean (${files} files under ${siteDir}; escapers derived: ${[...escapers].map(e => e.replace(/^\*\./, '')).sort().join(', ')}).`);
     }
   } catch (e) {
     console.error('escape-sink-guard: ' + e.message);

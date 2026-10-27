@@ -20,14 +20,15 @@
 // guard's to work out.
 // ⚠️ An `on…="…"` handler attribute runs in global scope, where no binding of
 // these names exists, so any call in one is the browser's. Attributes are read
-// in a page's markup AND in HTML a script builds as a string.
+// in a page's markup (as parse5 reads them, lib.mjs) AND in HTML a script
+// builds as a string.
 //
 // What changed for the fleet: the walk starts at the caller's site-dir (lib.mjs),
 // a site with no browser code yet passes with a notice instead of tripping
 // apfp's ten-file floor, and GUARD_SKIP names a file this guard leaves alone.
 
 import { pathToFileURL } from 'node:url';
-import { readSite, parseSkip, parseJs, kids, isFn, lineOf, htmlParts, annotate } from './lib.mjs';
+import { readSite, parseSkip, parseJs, kids, isFn, lineOf, annotate } from './lib.mjs';
 
 const NAMES = new Set(['confirm', 'prompt', 'alert']);
 const GLOBAL_OBJ = new Set(['window', 'globalThis', 'self']);
@@ -108,15 +109,13 @@ function decode(s) {
   return s.replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
-/* Each script's JavaScript comments blanked space-for-space in `text`, newlines
- * kept, so a handler attribute that a comment only mentions is not read, and
- * line numbers still hold. A unit's offset places its comments in the page. */
-function blankJsComments(text, units) {
-  const out = text.split('');
-  for (const u of units) {
-    for (const c of u.ast.comments || []) {
-      for (let i = u.offset + c.start; i < u.offset + c.end; i++) if (out[i] !== '\n') out[i] = ' ';
-    }
+/* A script's code with its JavaScript comments blanked space-for-space,
+ * newlines kept, so a handler attribute that a comment only mentions is not
+ * read, and offsets still hold. */
+function blankJsComments(u) {
+  const out = u.code.split('');
+  for (const c of u.ast.comments || []) {
+    for (let i = c.start; i < c.end; i++) if (out[i] !== '\n') out[i] = ' ';
   }
   return out.join('');
 }
@@ -127,8 +126,8 @@ function blankJsComments(text, units) {
  * script assembles from pieces (`'onclick="del(' + id + ')"'`); its text is
  * all there is to read, so the plain search stands in for it, and errs toward
  * flagging. */
-function handlerCall(raw) {
-  const body = decode(raw);
+function handlerCall(raw, decoded = false) {
+  const body = decoded ? raw : decode(raw);
   let ast = null;
   try { ast = parseJs(body, 'a handler attribute'); } catch { ast = null; }
   if (ast) {
@@ -150,14 +149,22 @@ export async function run({ siteDir, skipText }) {
       scan(u.ast, (at, what) => hits.push(annotate(f.file, lineOf(f.src, u.offset + at),
         `${what} is the browser's own dialog; use House.confirm / House.ask / House.notice (design.md -> 9. Confirmations).`)));
     }
-    // Handler attributes: in a page's markup, or in a string a script builds.
-    const text = blankJsComments(/\.html?$/i.test(f.file) ? htmlParts(f.src).markup : f.src, f.units);
-    const ah = /\son[a-z]+\s*=\s*(\\?["'])([\s\S]*?)\1/gi;
-    let m;
-    while ((m = ah.exec(text))) {
-      const what = handlerCall(m[1].length > 1 ? m[2].replace(/\\(["'])/g, '$1') : m[2]);
-      if (what) hits.push(annotate(f.file, lineOf(f.src, m.index),
-        `a handler attribute calls ${what}, the browser's own dialog; use House.confirm / House.ask / House.notice.`));
+    const flag = (line, what) => hits.push(annotate(f.file, line,
+      `a handler attribute calls ${what}, the browser's own dialog; use House.confirm / House.ask / House.notice.`));
+    // Handler attributes in a page's markup, as parse5 read them (value decoded).
+    for (const h of f.handlers) {
+      const what = handlerCall(h.value, true);
+      if (what) flag(h.line, what);
+    }
+    // Handler attributes in HTML a script builds as a string.
+    for (const u of f.units) {
+      const ah = /\son[a-z]+\s*=\s*(\\?["'])([\s\S]*?)\1/gi;
+      const text = blankJsComments(u);
+      let m;
+      while ((m = ah.exec(text))) {
+        const what = handlerCall(m[1].length > 1 ? m[2].replace(/\\(["'])/g, '$1') : m[2]);
+        if (what) flag(lineOf(f.src, u.offset + m.index), what);
+      }
     }
   }
   return { files: site.length, scripts, hits };

@@ -48,8 +48,9 @@ inputs:
 runs:
   using: composite
   steps:
-    # The code guards parse JavaScript with acorn, pinned with its lockfile in
-    # this directory. Installed here, never in the caller's tree.
+    # The code guards parse JavaScript with acorn and pages with parse5, pinned
+    # with their lockfile in this directory. Installed here, never in the
+    # caller's tree.
     - name: Install the guards' parser
       if: inputs.native-dialog == 'true' || inputs.escape-sink == 'true'
       shell: bash

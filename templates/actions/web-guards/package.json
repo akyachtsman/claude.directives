@@ -1,9 +1,11 @@
 {
   "name": "web-guards",
   "private": true,
-  "description": "The parser the web guards read JavaScript with. Installed by the web-guards composite from its own directory in the shared checkout; a project never copies it. Exact pin, and the lockfile beside it pins the whole graph (acorn has no dependencies).",
+  "description": "The parsers the web guards read pages with: acorn for JavaScript, parse5 for HTML (the same pin as claude.directives' check-paths.js; entities is parse5's only dependency, pinned too). Installed by the web-guards composite from its own directory in the shared checkout; a project never copies it. Exact pins, and the lockfile beside it pins the whole graph.",
   "type": "module",
   "dependencies": {
-    "acorn": "8.18.0"
+    "acorn": "8.18.0",
+    "entities": "8.1.0",
+    "parse5": "8.0.1"
   }
 }

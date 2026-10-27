@@ -6,28 +6,35 @@
 // caller's site-dir instead of a hard-coded app directory, and a project names
 // the files a guard leaves alone instead of editing the guard.
 //
-// ⛔ A REAL PARSER, AND IT REFUSES RATHER THAN GUESSES. apfp.claude tried a
+// ⛔ REAL PARSERS, AND THEY REFUSE RATHER THAN GUESS. apfp.claude tried a
 // hand-written tokenizer first and review found a wrong guess at JavaScript's
 // regex-versus-division `/` in three successive rounds, each one eating live
 // code. A file that does not parse fails the guard with its name; the fix is to
 // correct the file or skip it, never a fallback to text matching.
+// ⛔ PAGES ARE READ BY parse5, a spec-complete HTML parser, for the same reason
+// and on the same pin as check-paths.js (owner ruling 2026-10-09, #415). A
+// hand-written page reader stood here first, and #493's review found a new
+// corner in three successive rounds: a comment marker inside a script, a
+// `<!--` inside an attribute, `data-src` read as `src`. Which <script> runs,
+// where its body starts and what a handler attribute says are the parser's
+// answers, as a browser gives them.
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 const HERE = new URL('.', import.meta.url);
 
-let acorn = null;
-export async function loadAcorn() {
-  if (acorn) return acorn;
+let acorn = null, parse5 = null;
+export async function loadParsers() {
+  if (acorn && parse5) return;
   try {
     acorn = await import(new URL('node_modules/acorn/dist/acorn.mjs', HERE).href);
+    parse5 = await import(new URL('node_modules/parse5/dist/index.js', HERE).href);
   } catch (e) {
-    throw new Error('web-guards needs acorn, which is not installed. Run:\n' +
+    throw new Error('web-guards needs acorn and parse5, which are not installed. Run:\n' +
       '  npm ci --ignore-scripts --prefix ' + relative(process.cwd(), new URL('.', HERE).pathname) + '\n' +
       'Underlying error: ' + (e && e.message || e));
   }
-  return acorn;
 }
 
 /* One parse: as a classic script first, then as a module (import / export is
@@ -109,49 +116,48 @@ export function siteFiles(root, skip) {
   return out.sort();
 }
 
-/* A page split the way a browser reads it: `<!-- … -->` is a comment only in
- * the MARKUP; inside a <script> element it is just text of the script (a
- * template literal, a string), so a script body is never blanked (Codex,
- * #493). Returns the markup with its comments blanked space-for-space
- * (newlines kept, script bodies untouched), and every <script> element as
- * { attrs, offset, code }, offset being where its body starts in the page. */
-export function htmlParts(src) {
-  const out = src.split('');
-  const scripts = [];
-  const open = /<!--|<script\b/gi;
-  let m;
-  while ((m = open.exec(src))) {
-    if (m[0] === '<!--') {
-      const close = src.indexOf('-->', m.index + 4);
-      const stop = close === -1 ? src.length : close + 3;
-      for (let i = m.index; i < stop; i++) if (out[i] !== '\n') out[i] = ' ';
-      open.lastIndex = stop;
-      continue;
-    }
-    const tagEnd = src.indexOf('>', m.index);
-    if (tagEnd === -1) break;
-    const closeRe = /<\/script\s*>/gi;
-    closeRe.lastIndex = tagEnd + 1;
-    const c = closeRe.exec(src);
-    const bodyEnd = c ? c.index : src.length;
-    scripts.push({ attrs: src.slice(m.index + 7, tagEnd), offset: tagEnd + 1, code: src.slice(tagEnd + 1, bodyEnd) });
-    open.lastIndex = c ? c.index + c[0].length : src.length;
-  }
-  return { markup: out.join(''), scripts };
-}
+// A <script> whose type is one of these (or absent, or empty) is JavaScript;
+// anything else (JSON, an import map, a template) is data, not code. The
+// spec's JavaScript MIME types, plus `module`.
+const JS_TYPES = new Set(['', 'module', 'text/javascript', 'application/javascript', 'text/ecmascript',
+  'application/ecmascript', 'application/x-javascript', 'application/x-ecmascript', 'text/x-javascript',
+  'text/x-ecmascript', 'text/jscript', 'text/livescript', 'text/javascript1.0', 'text/javascript1.1',
+  'text/javascript1.2', 'text/javascript1.3', 'text/javascript1.4', 'text/javascript1.5']);
 
-/* The JavaScript in one file: the file itself, or each inline <script> body of
- * a page (an external `src=` script has none; a non-JavaScript type — JSON, an
- * import map, a template — is not code). `offset` maps a body position back
- * into the page, so a hit names the page's own line. */
-export function scriptUnits(file, src) {
-  if (!/\.html?$/i.test(file)) return [{ offset: 0, code: src }];
-  return htmlParts(src).scripts.filter(sc => {
-    if (/\bsrc\s*=/i.test(sc.attrs)) return false;
-    const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(sc.attrs);
-    if (type && !/^(text\/javascript|application\/javascript|module)$/i.test(type[1])) return false;
-    return !!sc.code.trim();
-  }).map(sc => ({ offset: sc.offset, code: sc.code }));
+/* A page as parse5 reads it: every inline <script> that runs, as
+ * { offset, code } (offset: where its body starts in the page, so a hit names
+ * the page's own line), and every `on…` handler attribute on any element, as
+ * { name, value, line }, its value already decoded by the parser. Template
+ * contents are walked too: a template's markup runs once it is cloned in. */
+export function htmlParts(src) {
+  const doc = parse5.parse(src, { sourceCodeLocationInfo: true });
+  const scripts = [], handlers = [];
+  const walk = node => {
+    if (node.attrs) {
+      const attrs = new Map(node.attrs.map(a => [a.name.toLowerCase(), a.value]));
+      for (const a of node.attrs) {
+        if (/^on./i.test(a.name)) {
+          const at = node.sourceCodeLocation && node.sourceCodeLocation.attrs && node.sourceCodeLocation.attrs[a.name];
+          handlers.push({ name: a.name, value: a.value, line: at ? at.startLine : node.sourceCodeLocation.startLine });
+        }
+      }
+      if (node.tagName === 'script' && !attrs.has('src')
+          && JS_TYPES.has(String(attrs.get('type') || '').trim().toLowerCase())) {
+        const loc = node.sourceCodeLocation;
+        const text = (node.childNodes || []).map(c => c.value || '').join('');
+        if (text.trim() && loc && loc.startTag) {
+          const offset = loc.startTag.endOffset;
+          // The raw source between the tags, so offsets are the page's own.
+          const code = loc.endTag ? src.slice(offset, loc.endTag.startOffset) : src.slice(offset);
+          scripts.push({ offset, code });
+        }
+      }
+    }
+    for (const c of node.childNodes || []) walk(c);
+    if (node.content) walk(node.content);
+  };
+  walk(doc);
+  return { scripts, handlers };
 }
 
 export const lineOf = (src, pos) => src.slice(0, pos).split('\n').length;
@@ -170,12 +176,14 @@ export function kids(n) {
 
 export const isFn = n => !!n && /^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression)$/.test(n.type);
 
-/* Read every file once: { file, src, units: [{ offset, code, ast }] }. */
+/* Read every file once: { file, src, units: [{ offset, code, ast }], handlers }.
+ * A .js / .mjs file is one unit; a page has one per inline script that runs. */
 export async function readSite(root, skip) {
-  await loadAcorn();
+  await loadParsers();
   return siteFiles(root, skip).map(file => {
     const src = readFileSync(file, 'utf8');
-    return { file, src, units: scriptUnits(file, src).map(u => ({ ...u, ast: parseJs(u.code, file) })) };
+    const parts = /\.html?$/i.test(file) ? htmlParts(src) : { scripts: [{ offset: 0, code: src }], handlers: [] };
+    return { file, src, handlers: parts.handlers, units: parts.scripts.map(u => ({ ...u, ast: parseJs(u.code, file) })) };
   });
 }
 

@@ -162,6 +162,8 @@ is added by the pass that finds it.
 |---|---|---|---|
 | Supabase MCP tools and `query_logs` window | `plugins/directives-toolkit/agents/supabase.md` | 2026-10-11 | Supabase MCP docs |
 | Supabase key roles and default function grants | `data.md` → *Keys*, `data.md` → *Client Auth Pattern (static app + anon key)* | 2026-10-11 | Supabase docs via the MCP `search_docs` tool (database advisor lints 0028/0029) |
+| Supabase default table grants, pg_net's `PUBLIC` queue grant, and leaked-password protection's plan | `data.md` → *Supabase Defaults* | 2026-10-27 | Supabase docs via the MCP `search_docs` tool (the "Securing your API" page, its default-privileges section, where Supabase says it is moving the default to revoke; the "Password security" page) |
+| The Supabase connector's approval question on SQL naming `DELETE`, `DROP`, `UPDATE` or `TRUNCATE`, which a project thread cannot show | `data.md` → *MCP Configuration* | 2026-10-27 | ⏳ The next project-thread session that runs such SQL through the connector |
 | Stitch and Figma MCPs for design import | `design.md` → *Establishing your project's look* | 2026-10-11 | `figma` in the `claude-plugins-official` marketplace.json; Stitch's remote MCP endpoint (`stitch.googleapis.com/mcp`) in Google Cloud's MCP supported-products list |
 | WCAG thresholds and target sizes | `design.md` → *Accessibility*, `design.md` → *Cross-platform & responsive* | 2026-10-11 | The current WCAG recommendation |
 

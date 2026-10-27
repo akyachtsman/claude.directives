@@ -68,8 +68,8 @@ inline copy of the derivation in either caller, or a caller that stops running
 derive-scripts.sh, is refused (4); a derivation widened or narrowed in a way
 the shipped callers cannot show is refused against the probe contract (5); and
 a caller whose comment stops naming a file its script `require`s, or the
-package.json its `npm install` reads, is refused while the same caller naming
-them passes (6). MEASURED 2026-10-08 via CHECK_REFRESH_DERIVATION_BIN: with
+package.json a CommonJS script runs under, is refused while the same caller
+naming them passes (6). MEASURED 2026-10-08 via CHECK_REFRESH_DERIVATION_BIN: with
 check 5's comparison disabled, exactly the two contract refusals fail; with
 check 6's, exactly the two "reworded comment" refusals. Check 4 replaced a
 two-copy comparison in batch C (R1), when the derivation moved into one file.
@@ -94,6 +94,12 @@ other case sets DERIVATION_CALLER_GLOBS (FIXTURE_GLOBS) so its workflow and
 composite fixtures stay callers; the last case runs without it. MEASURED
 2026-10-26 against the guard at d7d6235 via CHECK_REFRESH_DERIVATION_BIN:
 exactly that case fails (it read the workflow template as a caller).
+
+Step 5 of #460 (2026-10-27) removed check 6's npm-in-YAML reader, which only a
+workflow caller could exercise, with its eleven cases: the option-first and
+`--prefix` forms, the `cd` and env-prefix forms, the alias and directory
+variants, and the unreadable-YAML refusal. The cron fixture still refuses a
+dropped package.json, now through the CommonJS rule.
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -455,8 +461,10 @@ case("a derivation NARROWED where no caller shows it is refused against the cont
 case("the shipped derivation passes the probe check",
      callers=GOOD, expect_exit=0, needle="exactly the 6-path contract set")
 
-# Check 6 -- the cron-notify shape: a script that require()s a sibling, and
-# `npm install` run in .github/scripts. The names live only in a comment.
+# Check 6 -- the cron-notify shape: a CommonJS script that require()s a sibling,
+# so it needs the sibling and package.json. The names live only in a comment.
+# (The workflow's `npm install` below is text now: the reader that also asked
+# for package.json because of it went in #460 step 5.)
 NOTIFY_TASK = {"templates/scripts/notify-task.js":
                "const { sendEmail } = require('./notify-email.js');\n"}
 CRON_STEPS = ("jobs:\n  run:\n    steps:\n"
@@ -471,7 +479,7 @@ NAMED = ("      # needs .github/scripts/notify-email.js (required by the task)\n
          "      # and .github/scripts/package.json (what npm install reads)\n")
 CRON_NAMED = {**NOTIFY_TASK, "templates/workflows/cron.yml": CRON_STEPS.format(comment=NAMED)}
 
-case("a caller that names what its script requires and npm reads passes",
+case("a caller that names what its CommonJS script requires passes",
      callers=CRON_NAMED, expect_exit=0,
      needle="  .github/scripts/notify-email.js")
 
@@ -486,53 +494,6 @@ case("a reworded comment that drops package.json is refused",
      callers={**NOTIFY_TASK, "templates/workflows/cron.yml": CRON_STEPS.format(
          comment="      # needs .github/scripts/notify-email.js and the manifest\n")},
      expect_exit=1, needle="UNNAMED: .github/scripts/package.json")
-
-# Codex, #411: `--prefix` is a config option, legal before the subcommand too.
-PREFIX_FIRST = ("jobs:\n  run:\n    steps:\n"
-                "      - run: npm --prefix .github/scripts ci\n"
-                "{comment}"
-                '      - run: node .github/scripts/a.js\n')
-
-case("`npm --prefix .github/scripts ci` (option first) needs package.json named",
-     command_text=command_md(),
-     callers={"templates/workflows/p.yml": PREFIX_FIRST.format(comment="")},
-     expect_exit=1, needle="UNNAMED: .github/scripts/package.json")
-
-case("the same option-first caller naming package.json passes",
-     command_text=command_md(),
-     callers={"templates/workflows/p.yml": PREFIX_FIRST.format(
-         comment="      # npm reads .github/scripts/package.json\n")},
-     expect_exit=0, needle="  .github/scripts/package.json")
-
-# Codex, #411 round 3: npm is read as TOKENS, so any config option may precede
-# the subcommand, and a `cd` earlier in the block sets the directory.
-def npm_case(name, steps, expect_exit, needle):
-    case(name,
-         callers={"templates/workflows/n.yml": "jobs:\n  t:\n    steps:\n" + steps
-                  + "      - run: node .github/scripts/a.js\n"},
-         expect_exit=expect_exit, needle=needle)
-
-npm_case("`npm --silent install` in .github/scripts needs package.json named",
-         "      - working-directory: .github/scripts\n        run: npm --silent install\n",
-         1, "UNNAMED: .github/scripts/package.json")
-npm_case("`cd .github/scripts && npm --loglevel warn ci` needs package.json named",
-         "      - run: cd .github/scripts && npm --loglevel warn ci\n",
-         1, "UNNAMED: .github/scripts/package.json")
-npm_case("`CI=1 npm ci` (an env prefix) in .github/scripts needs package.json named",
-         "      - working-directory: .github/scripts\n        run: CI=1 npm ci\n",
-         1, "UNNAMED: .github/scripts/package.json")
-npm_case("`npm cit` (install-ci-test) in .github/scripts needs package.json named",
-         "      - working-directory: .github/scripts\n        run: npm cit\n",
-         1, "UNNAMED: .github/scripts/package.json")
-npm_case("`npm test` in .github/scripts needs package.json named (no alias list)",
-         "      - working-directory: .github/scripts\n        run: npm test\n",
-         1, "UNNAMED: .github/scripts/package.json")
-npm_case("a `${{ github.workspace }}/.github/scripts` working-directory still counts",
-         "      - working-directory: ${{ github.workspace }}/.github/scripts\n        run: npm ci\n",
-         1, "UNNAMED: .github/scripts/package.json")
-npm_case("`npm --silent install` in ANOTHER directory needs nothing",
-         "      - working-directory: .github/scripts/ui-tests\n        run: npm --silent install\n",
-         0, "1 referenced script(s)")
 
 # Codex, #411 round 3: an extensionless require resolves as Node does.
 LIB_DIR = {"templates/scripts/main.js": "const lib = require('./lib');\n",
@@ -688,20 +649,6 @@ cjs_case("a CommonJS script under a directory with its OWN package.json still ne
 cjs_case("a Python script needs no package.json",
          {"templates/scripts/p.py": "import os\n"}, "p.py", "",
          0, "1 referenced script(s)")
-
-case("npm run in ANOTHER directory needs no .github/scripts/package.json",
-     command_text=command_md(),
-     callers={"templates/workflows/kit.yml":
-              "jobs:\n  t:\n    steps:\n"
-              "      - working-directory: .github/scripts/ui-tests\n"
-              "        run: npm install\n"
-              "      - run: node .github/scripts/a.js\n"},
-     expect_exit=0, needle="1 referenced script(s)")
-
-case("an unreadable YAML caller is refused, not passed",
-     command_text=command_md(),
-     callers={"templates/workflows/bad.yml": "steps: [\n  - run: node .github/scripts/a.js\n"},
-     expect_exit=1, needle="not readable YAML")
 
 case("no callers at all is refused, never a vacuous pass",
      callers={}, expect_exit=1,

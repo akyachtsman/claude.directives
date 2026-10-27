@@ -261,27 +261,6 @@ jobs:
       - name: Check the /refresh-repo scripts do what the command says
         run: python3 .github/scripts/check-refresh-scripts-cases.py
 
-      # A composite can run a SIBLING by path, and both install carriers once
-      # copied only action.yml — every UI job downstream died at that step
-      # (#353, from #347 round 35). Not the FIRST step: `Validate report-path`
-      # is step 6 of 11, so the failure lands after Node setup, dependencies and
-      # the browser download. Late and expensive, not early. The
-      # referenced-script derivation cannot see this class at all: it enumerates
-      # .github/scripts/* by construction.
-      #
-      # The rule is "every file under templates/actions/*/ is tracked" and reads
-      # no shell. Two designs that DID read text — matching install carriers, then
-      # deriving references from run bodies — produced defects in seven rounds
-      # between them; the header records what each round found.
-      - name: Check nothing in an action directory is left untracked
-        run: python3 .github/scripts/check-action-siblings.py
-
-      # Everything in templates/actions/ is tracked, so the guard above prints
-      # the same OK whether its rule works or does nothing at all. Drive a
-      # mutated copy with CHECK_ACTION_SIBLINGS_BIN to re-prove discrimination.
-      - name: Check the sibling guard enforces what it claims
-        run: python3 .github/scripts/check-action-siblings-cases.py
-
       # An apostrophe inside a single-quoted shell string ENDS the quote. Two of
       # them keep the quotes balanced, so YAML parses and `bash -n` passes while
       # the program gets cut in half: ci-monitor's manual scan handed jq half a
@@ -463,8 +442,10 @@ jobs:
   # red here before any project can pick it up. The contrast step reads the
   # starter tokens projects copy, through the `contrast-script` input (a
   # project's own copy, here the shipped one), so the branch a project with its
-  # own pairs takes is the one proved. What the fixture covers:
-  # docs/internal/shared-workflows.md.
+  # own pairs takes is the one proved. It also runs both composites from a
+  # checkout of the called commit, so a sibling file a composite reads but git
+  # does not track fails here (what check-action-siblings.py guarded before
+  # #460 step 5). What the fixture covers: docs/internal/shared-workflows.md.
   shared-qa-selftest:
     name: Shared QA self-test
     uses: ./.github/workflows/shared-qa.yml

@@ -75,12 +75,14 @@ export function scan(ast, report) {
     const push = set => { stack.push(set); pushed++; };
     if (n.type === 'Program') push(lexicalNames(n.body, hoistedVars(n, new Set())));
     else if (isFn(n)) {
+      // The parameter scope: a default (`a = confirm(…)`) runs before the body,
+      // so it sees the parameters but none of the body's declarations (Codex, #493).
       const s = new Set();
       if (n.type === 'FunctionExpression' && n.id) s.add(n.id.name);
       for (const p of n.params) patternNames(p, s);
-      if (n.body.type === 'BlockStatement') { hoistedVars(n.body, s); lexicalNames(n.body.body, s); }
       push(s);
-    } else if (n.type === 'BlockStatement' && !isFn(parent)) push(lexicalNames(n.body, new Set()));
+    } else if (n.type === 'BlockStatement' && isFn(parent)) push(lexicalNames(n.body, hoistedVars(n, new Set())));
+    else if (n.type === 'BlockStatement') push(lexicalNames(n.body, new Set()));
     else if (n.type === 'SwitchStatement') push(lexicalNames(n.cases.flatMap(c => c.consequent), new Set()));
     else if (/^For(In|Of)?Statement$/.test(n.type)) {
       const init = n.type === 'ForStatement' ? n.init : n.left;

@@ -27,7 +27,7 @@
 // apfp's ten-file floor, and GUARD_SKIP names a file this guard leaves alone.
 
 import { pathToFileURL } from 'node:url';
-import { readSite, parseSkip, kids, isFn, lineOf, blankHtmlComments, annotate } from './lib.mjs';
+import { readSite, parseSkip, kids, isFn, lineOf, htmlParts, annotate } from './lib.mjs';
 
 const NAMES = new Set(['confirm', 'prompt', 'alert']);
 const GLOBAL_OBJ = new Set(['window', 'globalThis', 'self']);
@@ -108,11 +108,16 @@ function decode(s) {
   return s.replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
-/* Comments blanked space-for-space, newlines kept, so a handler attribute that
- * a comment only mentions is not read, and line numbers still hold. */
-function blankJsComments(code, ast) {
-  const out = code.split('');
-  for (const c of ast.comments || []) for (let i = c.start; i < c.end; i++) if (out[i] !== '\n') out[i] = ' ';
+/* Each script's JavaScript comments blanked space-for-space in `text`, newlines
+ * kept, so a handler attribute that a comment only mentions is not read, and
+ * line numbers still hold. A unit's offset places its comments in the page. */
+function blankJsComments(text, units) {
+  const out = text.split('');
+  for (const u of units) {
+    for (const c of u.ast.comments || []) {
+      for (let i = u.offset + c.start; i < u.offset + c.end; i++) if (out[i] !== '\n') out[i] = ' ';
+    }
+  }
   return out.join('');
 }
 
@@ -127,7 +132,7 @@ export async function run({ siteDir, skipText }) {
         `${what} is the browser's own dialog; use House.confirm / House.ask / House.notice (design.md -> 9. Confirmations).`)));
     }
     // Handler attributes: in a page's markup, or in a string a script builds.
-    const text = /\.html?$/i.test(f.file) ? blankHtmlComments(f.src) : blankJsComments(f.src, f.units[0].ast);
+    const text = blankJsComments(/\.html?$/i.test(f.file) ? htmlParts(f.src).markup : f.src, f.units);
     const ah = /\son[a-z]+\s*=\s*(\\?["'])([\s\S]*?)\1/gi;
     let m;
     while ((m = ah.exec(text))) {

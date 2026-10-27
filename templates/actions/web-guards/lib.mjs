@@ -109,29 +109,49 @@ export function siteFiles(root, skip) {
   return out.sort();
 }
 
+/* A page split the way a browser reads it: `<!-- … -->` is a comment only in
+ * the MARKUP; inside a <script> element it is just text of the script (a
+ * template literal, a string), so a script body is never blanked (Codex,
+ * #493). Returns the markup with its comments blanked space-for-space
+ * (newlines kept, script bodies untouched), and every <script> element as
+ * { attrs, offset, code }, offset being where its body starts in the page. */
+export function htmlParts(src) {
+  const out = src.split('');
+  const scripts = [];
+  const open = /<!--|<script\b/gi;
+  let m;
+  while ((m = open.exec(src))) {
+    if (m[0] === '<!--') {
+      const close = src.indexOf('-->', m.index + 4);
+      const stop = close === -1 ? src.length : close + 3;
+      for (let i = m.index; i < stop; i++) if (out[i] !== '\n') out[i] = ' ';
+      open.lastIndex = stop;
+      continue;
+    }
+    const tagEnd = src.indexOf('>', m.index);
+    if (tagEnd === -1) break;
+    const closeRe = /<\/script\s*>/gi;
+    closeRe.lastIndex = tagEnd + 1;
+    const c = closeRe.exec(src);
+    const bodyEnd = c ? c.index : src.length;
+    scripts.push({ attrs: src.slice(m.index + 7, tagEnd), offset: tagEnd + 1, code: src.slice(tagEnd + 1, bodyEnd) });
+    open.lastIndex = c ? c.index + c[0].length : src.length;
+  }
+  return { markup: out.join(''), scripts };
+}
+
 /* The JavaScript in one file: the file itself, or each inline <script> body of
  * a page (an external `src=` script has none; a non-JavaScript type — JSON, an
  * import map, a template — is not code). `offset` maps a body position back
  * into the page, so a hit names the page's own line. */
 export function scriptUnits(file, src) {
   if (!/\.html?$/i.test(file)) return [{ offset: 0, code: src }];
-  const units = [];
-  const re = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
-  let m;
-  while ((m = re.exec(blankHtmlComments(src)))) {
-    if (/\bsrc\s*=/i.test(m[1])) continue;
-    const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(m[1]);
-    if (type && !/^(text\/javascript|application\/javascript|module)$/i.test(type[1])) continue;
-    if (!m[2].trim()) continue;
-    units.push({ offset: m.index + m[0].indexOf(m[2], m[1].length), code: m[2] });
-  }
-  return units;
-}
-
-/* `<!-- … -->` blanked space-for-space (newlines kept), so commented-out markup
- * is neither scanned nor shifts a line number. */
-export function blankHtmlComments(src) {
-  return src.replace(/<!--[\s\S]*?-->/g, c => c.replace(/[^\n]/g, ' '));
+  return htmlParts(src).scripts.filter(sc => {
+    if (/\bsrc\s*=/i.test(sc.attrs)) return false;
+    const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(sc.attrs);
+    if (type && !/^(text\/javascript|application\/javascript|module)$/i.test(type[1])) return false;
+    return !!sc.code.trim();
+  }).map(sc => ({ offset: sc.offset, code: sc.code }));
 }
 
 export const lineOf = (src, pos) => src.slice(0, pos).split('\n').length;

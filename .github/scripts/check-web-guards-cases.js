@@ -53,6 +53,10 @@ const names = [...new Set([...Object.keys({ ...pkg.dependencies, ...pkg.devDepen
 const npmrc = fs.existsSync('.npmrc') ? fs.readFileSync('.npmrc', 'utf8') : '';
 if (cmd === 'install') {
   if (names.some(n => n.startsWith('@company/')) && !npmrc.includes('@company:registry')) { console.error('npm error 404 Not Found - @company/ui'); process.exit(1); }
+  for (const spec of Object.values({ ...pkg.dependencies, ...pkg.devDependencies })) {
+    const m = /^file:(.+)$/.exec(spec);
+    if (m && !fs.existsSync(m[1])) { console.error('npm error code ENOENT ' + m[1]); process.exit(1); }
+  }
   if (names.includes('unresolvable')) { console.error('npm error 404 Not Found - unresolvable'); process.exit(1); }
   fs.writeFileSync('package-lock.json', '{}'); process.exit(0);
 }
@@ -292,11 +296,17 @@ const CASES = [
     files: { 'package.json': pkg({ 'mod-x': '1' }), 'package-lock.json': '{}' }, code: 0, want: 'clean (1 audited' },
   { guard: 'audit', name: 'a moderate advisory fails at audit-level moderate',
     level: 'moderate', files: { 'package.json': pkg({ 'mod-x': '1' }), 'package-lock.json': '{}' }, code: 1, want: 'moderate: mod-x' },
-  { guard: 'audit', name: 'no lockfile: what an install would resolve is audited, in scratch, not the checkout',
+  { guard: 'audit', name: 'no lockfile: what an install would resolve is audited, and the checkout is left as it was',
     files: { 'scripts/package.json': pkg({ 'bad-mailer': '1' }) }, code: 1, want: 'no lockfile: audited what an install would resolve today',
     after: root => existsSync(join(root, 'scripts', 'package-lock.json')) ? 'a lockfile was written into the checkout' : null },
   { guard: 'audit', name: "no lockfile: the project's own .npmrc (a private registry) is used to resolve (Codex, #493)",
     files: { 'app/package.json': pkg({ '@company/ui': '1' }), 'app/.npmrc': '@company:registry=https://npm.example.test/\n' }, code: 0, want: 'no lockfile: audited what an install would resolve today' },
+  { guard: 'audit', name: 'no lockfile: a file: tarball beside the manifest resolves (Codex, #493)',
+    files: { 'app/package.json': pkg({ 'local-lib': 'file:./local-lib-1.0.0.tgz' }), 'app/local-lib-1.0.0.tgz': 'tgz' }, code: 0, want: 'no lockfile: audited what an install would resolve today',
+    after: root => existsSync(join(root, 'app', 'package-lock.json')) ? 'a lockfile was left in the checkout' : null },
+  { guard: 'audit', name: 'no lockfile and the resolve fails: the checkout is still left as it was',
+    files: { 'app/package.json': pkg({ unresolvable: '1' }) }, code: 1, want: 'npm could not resolve one',
+    after: root => existsSync(join(root, 'app', 'package-lock.json')) ? 'a lockfile was left in the checkout' : null },
   { guard: 'audit', name: "a workspace package is covered by its root's lockfile, not resolved alone",
     files: { 'package.json': pkg({ ok: '1' }, { workspaces: ['packages/*'] }), 'package-lock.json': JSON.stringify({ packages: { '': {}, 'packages/app': {} } }),
       'packages/app/package.json': pkg({ unresolvable: '1' }) }, code: 0, want: 'a workspace of package-lock.json, audited with it' },

@@ -20,9 +20,12 @@
 //     as such. A lockfile is always audited: a workspace root declares nothing
 //     itself and locks every workspace's dependencies.
 //   - A manifest with dependencies but no lockfile is resolved into a lockfile
-//     in a scratch directory (never in the checkout) and that is audited: what
-//     an install would fetch today. apfp's hard failure here would have turned
-//     every project red on the package.json the shared scripts install.
+//     and that is audited: what an install would fetch today. apfp's hard
+//     failure here would have turned every project red on the package.json the
+//     shared scripts install. It is resolved IN PLACE, where npm sees the
+//     project as an install would (its .npmrc, a file: tarball beside it,
+//     Codex, #493), and the lockfile it writes is removed afterwards, so the
+//     checkout is left as it was.
 //   - A workspace package with no lockfile of its own is covered by the root
 //     lockfile that lists it, and is not resolved alone.
 //   - The verdict is read from `npm audit --json`, so an audit that did not run
@@ -32,10 +35,9 @@
 //   - NPM_BIN names the npm to run; the cases suite points it at a fake.
 
 import { pathToFileURL } from 'node:url';
-import { readdirSync, readFileSync, existsSync, mkdtempSync, copyFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 
 const LEVELS = ['info', 'low', 'moderate', 'high', 'critical'];
 const NPM = process.env.NPM_BIN || 'npm';
@@ -90,7 +92,7 @@ function auditTree(manifest, level) {
   // A lockfile is always audited, whatever the manifest declares itself: a
   // workspace root may declare nothing and lock every workspace's dependencies
   // (Codex, #493). Only a manifest with neither has nothing to audit.
-  let cwd = dir, scratch = null, note = '';
+  let written = null, note = '';
   const lock = ['package-lock.json', 'npm-shrinkwrap.json'].find(f => existsSync(join(dir, f)));
   if (!lock) {
     const owner = workspaceRoot(dir);
@@ -100,22 +102,22 @@ function auditTree(manifest, level) {
         'Commit the package-lock.json npm install writes here.'] };
     }
     if (!DEP_KEYS.some(k => pkg[k] && Object.keys(pkg[k]).length)) return { verdict: 'none', lines: [] };
-    scratch = mkdtempSync(join(tmpdir(), 'audit-deps-'));
-    copyFileSync(manifest, join(scratch, 'package.json'));
-    // The project's own npm config (a private registry, its auth) travels with
-    // it: npm reads a .npmrc beside package.json as that project's (Codex, #493).
-    if (existsSync(join(dir, '.npmrc'))) copyFileSync(join(dir, '.npmrc'), join(scratch, '.npmrc'));
+    written = join(dir, 'package-lock.json');
     const r = spawnSync(NPM, ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'],
-      { cwd: scratch, encoding: 'utf8' });
+      { cwd: dir, encoding: 'utf8' });
     if (r.status !== 0) {
-      rmSync(scratch, { recursive: true, force: true });
+      rmSync(written, { force: true });
       return { verdict: 'error', lines: [`no lockfile, and npm could not resolve one: ${(r.stderr || r.error || '').toString().trim().split('\n').slice(-3).join(' ')}`,
         'Commit a package-lock.json beside it, or name it in audit-skip.'] };
     }
-    cwd = scratch; note = ' (no lockfile: audited what an install would resolve today)';
+    note = ' (no lockfile: audited what an install would resolve today)';
   }
-  const r = spawnSync(NPM, ['audit', '--json', `--audit-level=${level}`], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  if (scratch) rmSync(scratch, { recursive: true, force: true });
+  let r;
+  try {
+    r = spawnSync(NPM, ['audit', '--json', `--audit-level=${level}`], { cwd: dir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  } finally {
+    if (written) rmSync(written, { force: true });
+  }
   let report;
   try { report = JSON.parse(r.stdout); } catch { report = null; }
   if (!report || report.error || !report.metadata || !report.metadata.vulnerabilities) {

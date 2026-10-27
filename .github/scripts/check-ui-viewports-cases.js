@@ -16,7 +16,7 @@
 // manifest entry is required for this file.
 // ESM (.github/scripts/package.json declares "type": "module").
 //
-// Run: node .github/scripts/check-ui-viewports-cases.js
+// Run: node .github/scripts/check-ui-viewports-cases.js   (UI_VIEWPORTS_CASES_JOBS=1 runs the cases one at a time; see THE CASES RUN SIDE BY SIDE)
 
 // ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
 // CLAUDE.md now keeps a one-line purpose per gate command; the history and
@@ -38,10 +38,10 @@
 //   "POST-RUN IMPORTABILITY IS NOW A PREREQUISITE". The exit-0 pin on the limit
 //   is THE RECORDED LIMIT case below.
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, unlinkSync, lstatSync, existsSync } from 'fs';
-import { spawnSync } from 'child_process';
+import { spawnSync, fork } from 'child_process';
 import { createRequire } from 'module';
 import { pathToFileURL, fileURLToPath } from 'url';
-import { tmpdir } from 'os';
+import { tmpdir, availableParallelism } from 'os';
 import { join, resolve, dirname, sep, relative } from 'path';
 import { binPath } from './cases_lib.mjs';
 
@@ -2402,15 +2402,18 @@ function safeIsLink(p) {
   try { return lstatSync(p).isSymbolicLink(); } catch { return false; }
 }
 
-const failures = [];
-for (const [label, files, expected, diagnostic, opts] of CASES) {
-  const { code, out } = runCase(files, opts);
+// The verdict on one case, from what its run returned. Kept apart from the
+// running so the pool below can hand results back in any order and the report
+// still reads in CASES order.
+function judge([label, , expected, diagnostic, opts], { code, out }) {
   if (code !== expected) {
-    failures.push(`${label}\n      expected exit ${expected}; got ${code}.\n      ${out}`);
-  } else if (!out.includes(diagnostic)) {
-    failures.push(`${label}\n      exited ${code} as expected, but for the wrong stated reason.\n`
-      + `      expected the output to contain: ${JSON.stringify(diagnostic)}\n      ${out}`);
-  } else if ((opts && opts.mustNotSay || []).some(bad => out.includes(bad))) {
+    return { fail: `${label}\n      expected exit ${expected}; got ${code}.\n      ${out}` };
+  }
+  if (!out.includes(diagnostic)) {
+    return { fail: `${label}\n      exited ${code} as expected, but for the wrong stated reason.\n`
+      + `      expected the output to contain: ${JSON.stringify(diagnostic)}\n      ${out}` };
+  }
+  if ((opts && opts.mustNotSay || []).some(bad => out.includes(bad))) {
     // WHAT THE VERDICT MUST NOT SAY, asserted as directly as what it must.
     // Seven rounds of this PR found a stale EXECUTED claim somewhere (3, 6, 8,
     // 9, 17, 18, 19), and every fix so far was a person reading. This is the one
@@ -2420,16 +2423,101 @@ for (const [label, files, expected, diagnostic, opts] of CASES) {
     // since it proves a phrasing TRAVELLED and never that no other line
     // contradicts it. One carrier pinned is not the class closed.
     const said = (opts.mustNotSay || []).filter(bad => out.includes(bad));
-    failures.push(`${label}\n      exited ${code} with the right reason, but the output still says`
-      + ` ${JSON.stringify(said)}.\n      ${out}`);
-  } else {
-    console.log(`OK:   ${label} (exit ${code})`);
+    return { fail: `${label}\n      exited ${code} with the right reason, but the output still says`
+      + ` ${JSON.stringify(said)}.\n      ${out}` };
   }
+  return { ok: `OK:   ${label} (exit ${code})` };
 }
 
-if (failures.length) {
-  console.error('\ncheck-ui-viewports-cases: FAILED\n');
-  for (const f of failures) console.error(`  - ${f}\n`);
-  process.exit(1);
+// ── THE CASES RUN SIDE BY SIDE ───────────────────────────────────────────────
+// Run one after another this suite took ~229s of CI's ~7 minutes, and nearly all
+// of it is each case's own node + Playwright start-up, not waiting. The cases
+// share nothing but the read-only node_modules they symlink, so a pool of forked
+// workers runs them at once, one case per worker at a time, and the report is
+// printed in CASES order whatever order they finish in.
+//
+// TWO THINGS ONE CASE COULD SEE OF ANOTHER, and each is closed rather than hoped
+// away:
+//   * os.tmpdir(). The FORGE cases enumerate it for `ui-viewports-verdict-*` and
+//     take the newest — run beside other cases, "the newest" could be a
+//     NEIGHBOUR's box, and the case would measure the neighbour. Each worker
+//     gets its own TMPDIR, so a worker's tmpdir holds only the case it is running,
+//     exactly as the whole of /tmp did when the cases ran one by one.
+//   * the clock. The shortTimeout cases bound the gate's config evaluation at 2s,
+//     and one of them asserts an HONEST config finishes inside it. On a loaded
+//     machine that twin could fail for the machine's sake, so those cases run
+//     after the pool has drained, alone, as they always did.
+// A worker that dies with a case in flight fails that case; a case with no
+// result at the end fails the suite. Nothing is passed for not having reported.
+//
+// UI_VIEWPORTS_CASES_JOBS sets the pool size (default: the machine's available
+// parallelism); 1 runs every case in sequence, as before.
+const SELF = fileURLToPath(import.meta.url);
+
+if (process.argv[2] === '--worker') {
+  process.on('message', (i) => {
+    const [, files, , , opts] = CASES[i];
+    let result;
+    try { result = runCase(files, opts); } catch (e) { result = { code: 'HARNESS THREW', out: String(e && e.stack || e) }; }
+    process.send({ i, ...result });
+  });
+  process.on('disconnect', () => process.exit(0));
+} else {
+  const jobs = Math.max(1, Number(process.env.UI_VIEWPORTS_CASES_JOBS) || availableParallelism());
+  const results = new Array(CASES.length);
+  const timed = [];
+  const free = [];
+  CASES.forEach(([, , , , opts], i) => (opts && opts.shortTimeout ? timed : free).push(i));
+
+  // Runs `indices` across `n` workers; resolves once every one has a result.
+  const pool = (indices, n) => new Promise((resolveAll) => {
+    const queue = [...indices];
+    let live = 0;
+    const scratch = [];
+    const spawnWorker = () => {
+      const dir = mkdtempSync(join(tmpdir(), 'ui-viewports-worker-'));
+      scratch.push(dir);
+      const w = fork(SELF, ['--worker'], { env: { ...process.env, TMPDIR: dir } });
+      let current = null;
+      live += 1;
+      const next = () => {
+        if (!queue.length) { w.disconnect(); return; }
+        current = queue.shift();
+        w.send(current);
+      };
+      w.on('message', ({ i, code, out }) => { results[i] = { code, out }; current = null; next(); });
+      w.on('exit', (code, signal) => {
+        if (current !== null) {
+          results[current] = { code: 'WORKER DIED', out: `the worker running this case exited (code ${code}, signal ${signal})` };
+        }
+        live -= 1;
+        if (!live) {
+          for (const d of scratch) rmSync(d, { recursive: true, force: true });
+          resolveAll();
+        }
+      });
+      next();
+    };
+    if (!queue.length) { resolveAll(); return; }
+    for (let k = 0; k < Math.min(n, queue.length); k += 1) spawnWorker();
+  });
+
+  await pool(free, jobs);
+  await pool(timed, 1);
+
+  const failures = [];
+  CASES.forEach((c, i) => {
+    const verdict = results[i]
+      ? judge(c, results[i])
+      : { fail: `${c[0]}\n      no result was reported for this case` };
+    if (verdict.ok) console.log(verdict.ok); else failures.push(verdict.fail);
+  });
+
+  if (failures.length) {
+    console.error('\ncheck-ui-viewports-cases: FAILED\n');
+    for (const f of failures) console.error(`  - ${f}\n`);
+    process.exit(1);
+  }
+  console.log(`check-ui-viewports-cases: OK — ${CASES.length} pinned config shapes read correctly`
+    + ` (${jobs} at a time; ${timed.length} timing cases alone).`);
 }
-console.log(`check-ui-viewports-cases: OK — ${CASES.length} pinned config shapes read correctly.`);

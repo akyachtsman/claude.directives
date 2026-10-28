@@ -62,11 +62,18 @@ adding silently removes the only thing that runs when the legacy build does.
 
 *Supports:* the rule that keeping the arm is not detecting the exposure.
 
-`qa-live.yml` runs the ordinary UI suite. **A rogue build that republishes the
-unfiltered tree serves the app as 200 and passes it.** The internal paths are
-exposed and the watcher is green. So the arm buys a run at the right moment and
-nothing more; the deny-list 200/404 check lives in `pages-deploy.yml` and runs
-after its own deploy only.
+`qa-live.yml`'s UI suite is the ordinary one. **A rogue build that republishes
+the unfiltered tree serves the app as 200 and passes it.** So the arm buys a run
+at the right moment, and the detection is a second job in that run:
+the job named "Deny-listed paths serve 404" in `shared-qa-live.yml` reads the project's
+`.github/pages-deny.txt` and probes each entry, plus up to three tracked files
+under an entry that is a directory, twice and 30s apart, failing on anything
+but 404. It runs after every watched build, so it sees the legacy build a
+visibility flip fires; `pages-deploy.yml`'s verify job still makes the full
+per-file check after its own deploy. Until 2026-10-27 the check lived only in
+the deploy, and a flip had to be checked by hand (#460 step 1 leftover).
+What it cannot see is a flip's build that never completes, or an arm that was
+dropped (*Keep the existing arms*, above).
 
 ## The bound on completed-run watchers
 

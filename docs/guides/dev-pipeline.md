@@ -207,8 +207,8 @@ What `/new-repo` scaffolds in **every** project:
   `styles/` (`tokens.css` + `components.css`, set by `/design-intake`);
   `index.html` is not scaffolded — the first build writes it
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
-- the standard workflows — **three unconditionally**: `qa.yml`, `qa-live.yml`,
-  `qa-response.yml` (`keepalive.yml` is NOT installed — `cicd-setup.md` Step 9f;
+- the standard workflows — **two unconditionally**: `qa.yml` and `qa-live.yml`
+  (`keepalive.yml` is NOT installed — `cicd-setup.md` Step 9f;
   `cron-notify.yml` is added only when the project has a scheduled task, owner
   ruling 2026-10-10)
 - **plus `pages-deploy.yml` on an Actions-source project only** (it IS the

@@ -15,15 +15,14 @@ Step-by-step guide for deploying the QA pipeline to a new project repo. Follow i
 
 ## Overview
 
-Three GitHub Actions workflows replace manual agent invocation for the mechanical parts of the QA pipeline:
+Two GitHub Actions workflows replace manual agent invocation for the mechanical parts of the QA pipeline:
 
 | Workflow | Trigger | What it runs |
 |---|---|---|
 | `qa.yml` | PR to main, push to main, manual dispatch | Static checks + Playwright against local server |
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
-| `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-All three are standard (`global.md` → *Repo Structure Standard*). `pages-deploy.yml` (Step 9d-bis) is added only on Actions-source Pages, and the scheduled `cron-notify.yml` (Step 9f) only when the project has a scheduled task. `keepalive.yml` is not part of the standard (Step 9f).
+Both are standard (`global.md` → *Repo Structure Standard*). `pages-deploy.yml` (Step 9d-bis) is added only on Actions-source Pages, and the scheduled `cron-notify.yml` (Step 9f) only when the project has a scheduled task. `keepalive.yml` is not part of the standard (Step 9f).
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -98,9 +97,8 @@ the optional `DIRECTIVES_READ_TOKEN` secret (`TIME-SENSITIVE.md` in
 ## Step 1 — Copy the workflow callers
 
 Copy the QA callers from `claude.directives` into the target repo's
-`.github/workflows/`: `qa.yml` and `qa-live.yml` here, `qa-response.yml` just
-below, all three standard. They need no composite or script beside them. Beside
-the scripts a directive names (below), every project carries the CommonJS manifest:
+`.github/workflows/`: `qa.yml` and `qa-live.yml`, both standard. They need no
+composite or script beside them. Beside the scripts a directive names (below), every project carries the CommonJS manifest:
 
 ```bash
 mkdir -p .github/workflows .github/scripts
@@ -158,13 +156,11 @@ bought ~15s. The measurement and its provenance live in one place — the
 composite's own comment at the cache step (`templates/actions/ui-suite/action.yml`
 in `claude.directives`).
 
-Event-driven QA dispatch hook — **part of the standard set**. Lets sessions and
-automations trigger QA via `repository_dispatch`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-response.yml \
-  -o .github/workflows/qa-response.yml
-```
+A live run on demand is `qa-live.yml`'s manual dispatch (its `app_url` input
+overrides `APP_URL`). The old `qa-response.yml` dispatch hook is retired: no
+template or automation sends its `repository_dispatch` events, and
+claude.prop's pilot dispatch was that workflow's first run there ever.
+`/refresh-repo` reports an installed copy as `RETIRED` (#460).
 
 Alternatively, have the active Claude Code session fetch and write these files via GitHub MCP tools if no CLI is available.
 
@@ -172,7 +168,7 @@ Alternatively, have the active Claude Code session fetch and write these files v
 
 ## Step 2 — Fill in the callers' inputs
 
-In each copied caller (`qa.yml`, `qa-live.yml`, `qa-response.yml`), confirm
+In each copied caller (`qa.yml`, `qa-live.yml`), confirm
 `tests-dir` names the project's Playwright test directory (default:
 `.github/scripts/ui-tests`). A project with the CI-build opt-in sets the `qa`
 caller's `build-cmd` and `site-dir` to the same values as its `pages-deploy.yml`
@@ -242,8 +238,8 @@ No workflow passes it arguments: point `--tests-dir` at the directory holding th
 install's exit code, and reports `CANNOT CHECK` rather than a ceiling when
 Playwright itself cannot be loaded.
 
-Then generate and **commit** the lockfile — required: the shared `qa`, `qa-live`
-and `qa-response` runs key setup-node's npm cache to the kit's `package-lock.json`,
+Then generate and **commit** the lockfile — required: the shared `qa` and `qa-live`
+runs key setup-node's npm cache to the kit's `package-lock.json`,
 and setup-node hard-fails ("Dependencies lock file is not found") without it:
 
 ```bash
@@ -265,7 +261,7 @@ In the target repo on GitHub:
 |---|---|
 | `APP_URL` | Live app URL (e.g. `https://<username>.github.io/<repo>/`) |
 
-Used by `qa-live.yml` and `qa-response.yml`, which take the live URL from this variable and nothing else: a baseURL default filled in to the kit's `playwright.config.js` is not read by their `Require APP_URL` gate, so a project that relied on one still has to set the variable (pilots claude.prop + claude.trading, 2026-10-13).
+Used by `qa-live.yml`, which takes the live URL from this variable (or its `app_url` dispatch input) and nothing else: a baseURL default filled in to the kit's `playwright.config.js` is not read by its `Require APP_URL` gate, so a project that relied on one still has to set the variable (pilots claude.prop + claude.trading, 2026-10-13).
 
 ---
 
@@ -386,7 +382,9 @@ copies the site minus every `.github/pages-deny.txt` path, publishes it,
 retries GitHub's transient publish failure from the same artifact, then asserts
 the root serves 200, each denied path 404, and each path in
 `.github/pages-public.txt` (internal-looking files that must stay public) 200.
-The caller's header lists the rest of the switch: a watcher named "Pages Deploy"
+`qa-live.yml` probes the same deny-list again after every watched build, so a
+visibility flip's unfiltered legacy build fails a run too (`global.md` →
+*Hosting & Deployment*). The caller's header lists the rest of the switch: a watcher named "Pages Deploy"
 in `qa-live.yml` (add, never replace; Step 9c-bis). Installed before the
 project's first page exists, it publishes nothing until `index.html` arrives: a
 run with no build and no Pages deployment ever skips its Publish job, and
@@ -448,7 +446,7 @@ Key values to customize after copying:
 
 | Value | What to substitute |
 |---|---|
-| `REPLACE_WITH_YOUR_APP_URL` (`playwright.config.js`) | Live app URL fallback when the `APP_URL` env var is unset — read by an ad-hoc local run only; `qa-live.yml` and `qa-response.yml` never fall back to it (Step 4) |
+| `REPLACE_WITH_YOUR_APP_URL` (`playwright.config.js`) | Live app URL fallback when the `APP_URL` env var is unset — read by an ad-hoc local run only; `qa-live.yml` never falls back to it (Step 4) |
 | `tests-dir` (each qa caller's input) | Path to your Playwright test directory (default: `.github/scripts/ui-tests`) |
 
 Required repository secrets:
@@ -481,7 +479,7 @@ Optional repository variables (the shared qa workflows pass them through the `ui
 
 - [ ] `.github/workflows/qa.yml` present (a caller of `shared-qa.yml`) and triggering on PRs to `main` and pushes to `main`
 - [ ] `.github/workflows/qa-live.yml` present (a caller of `shared-qa-live.yml`) and triggering after Pages deploy
-- [ ] `.github/workflows/qa-response.yml` present (a caller of `shared-qa-response.yml`) and ready for dispatch — part of the standard set
+- [ ] `.github/workflows/qa-response.yml` ABSENT: retired, `qa-live.yml`'s manual dispatch runs the live suite on demand
 - [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present (a caller of `shared-pages-deploy.yml`), `build-cmd`/`site-dir` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
 - [ ] `.github/workflows/cron-notify.yml` present with `.github/scripts/notify-task.js` if the project has a scheduled task, both absent otherwise; `keepalive.yml` ABSENT (Step 9f)
 - [ ] every caller pinned `@v1`, `@vX.Y.Z` or a commit SHA, and passing its secrets by name

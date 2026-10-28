@@ -65,7 +65,7 @@ Execute in order:
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** of
    **callers** — copy these files from `claude.directives/templates/workflows/`
-   — **three on branch-source, four on Actions-source**: `pages-deploy.yml` is
+   — **two on branch-source, three on Actions-source**: `pages-deploy.yml` is
    ACTIONS-SOURCE ONLY, so check the project's Pages source before copying into
    `.github/workflows/`. Each is a short file whose one job calls a shared
    workflow of `claude.directives` at `@v1`, so the composites and scripts that
@@ -85,7 +85,6 @@ Execute in order:
      the first page exists, it is a deliberate no-op until `index.html`
      arrives (no build, no Pages deployment ever: the Publish job is skipped
      and `qa-live.yml` skips its suite)
-   - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - **Not `cron-notify.yml`** (the scheduled job). It is installed only when
      the project has a scheduled task (`global.md` → *Repo Structure
      Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts

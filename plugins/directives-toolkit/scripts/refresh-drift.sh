@@ -302,6 +302,12 @@ for f in .github/workflows/*.yml .github/workflows/*.yaml .github/actions/*/* \
     .github/workflows/pages-retry.yml)
       echo "RETIRED: $f — upstream deleted this watcher; delete it"
       continue ;;
+    # The dispatch hook, retired 2026-10-27 (#460 step 1 leftover): nothing
+    # sends its repository_dispatch events. Matched before the CALLER test, since
+    # a caller of shared-qa-response.yml is still a removal finding.
+    .github/workflows/qa-response.yml)
+      echo "RETIRED: $f — upstream retired this dispatch hook; delete it (qa-live.yml's manual dispatch runs the live suite on demand)"
+      continue ;;
     # The qa.yml guards and their inputs, removed 2026-10-16 (#460 step 2).
     .github/scripts/workflow-ref-guard.py|.github/scripts/check-job-bounds.py|\
     .github/scripts/check-py-warnings.py|.github/scripts/check-ui-suite-env.py|\

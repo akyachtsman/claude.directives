@@ -123,7 +123,7 @@ const PLACE = {
     'templates/project-test-plan-template.md', 'templates/implementation-summary-template.md',
     `${P}/skills/doc-comp/`],
   pr: [`${P}/commands/commit-chk.md`, `${P}/agents/pr-readiness-reviewer.md`,
-    'templates/pr-checklist.md', 'templates/workflows/qa.yml', '.github/workflows/shared-qa.yml', 'templates/workflows/qa-response.yml', '.github/workflows/shared-qa-response.yml',
+    'templates/pr-checklist.md', 'templates/workflows/qa.yml', '.github/workflows/shared-qa.yml', '.github/workflows/shared-qa-response.yml',
     'templates/workflows/qa-live.yml', '.github/workflows/shared-qa-live.yml', 'templates/ui-tests/', 'templates/actions/secret-scan/', 'templates/actions/web-guards/', 'templates/actions/ui-suite/',
     'templates/scripts/check-contrast.js', 'docs/standards/contrast-guardrail.md', 'templates/scripts/check-ui-viewports.js',
     'docs/standards/viewport-classes-history.md',
@@ -409,7 +409,6 @@ const FLOW = [
   // The callers (Phase E of #460 step 4): the composites and the scripts they
   // run are read from this repo at the called commit, never copied.
   ['/new-repo', 'qa.yml', 'cop', 'copies the caller', 'a', 'copy these files from'],
-  ['/new-repo', 'qa-response.yml', 'cop', 'copies the caller', 'a', 'copy these files from'],
   ['/new-repo', 'qa-live.yml', 'cop', 'copies the caller', 'a', 'copy these files from'],
   ['/new-repo', 'pages-deploy.yml', 'cop', 'copies the caller (Actions-source only)', 'a', 'copy these files from'],
   // The scripts a directive names are DERIVED, never hand-listed (batch 5).
@@ -442,7 +441,6 @@ const FLOW = [
   ['global.md', 'pages-deploy.yml', 'gov', 'requires (Actions-source only)'],
   ['global.md', 'qa.yml', 'gov', 'requires'],
   ['global.md', 'qa-live.yml', 'gov', 'requires'],
-  ['global.md', 'qa-response.yml', 'gov', 'requires'],
   ['global.md', 'cron-notify.yml', 'gov', 'only with a scheduled task'],
   ['global.md', '/learn', 'gov', 'record lessons with'],
   ['global.md', '/handoff-session', 'gov', 'hand off with'],
@@ -489,7 +487,6 @@ const FLOW = [
   // The workflows run the kit: the arrow starts at the actor (Codex audit, #393).
   ['qa.yml', 'ui-tests/', 'run', 'runs the kit in CI (tests-dir)', 'a', 'tests-dir:'],
   ['qa-live.yml', 'ui-tests/', 'run', 'runs the kit against the live site (tests-dir)', 'a', 'tests-dir:'],
-  ['qa-response.yml', 'ui-tests/', 'run', 'runs the kit on demand (tests-dir)', 'a', 'tests-dir:'],
   // upkeep
   ['/refresh-repo', 'kit-defects.md', 'run', 'checks against', 'a', 'Fetch the list'],
   ['/refresh-repo', 'scripts/', 'run', 'runs Phase 3 (applied-check + stamp)', 'a', 'scripts/refresh-stamp.sh'],

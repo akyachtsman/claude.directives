@@ -1039,6 +1039,15 @@ run(r, "refresh-delta.sh")
 expect("drift: a retired watcher still installed is RETIRED, not NO-TEMPLATE (#460)",
        run(r, "refresh-drift.sh"), 0, "RETIRED: .github/workflows/pages-retry.yml — upstream deleted this watcher",
        absent="NO-TEMPLATE: .github/workflows/pages-retry.yml")
+# The retired dispatch hook is RETIRED even as a caller of a shared workflow,
+# which would otherwise read as CALLER and be kept (#460 step 1 leftover).
+r = project("drift-retired-response", at=S_FILES, changes={".github/workflows/qa-response.yml":
+    "name: QA — Event-Driven Response\non: workflow_dispatch\njobs:\n  respond:\n"
+    "    uses: akyachtsman/claude.directives/.github/workflows/shared-qa-response.yml@v1\n"})
+run(r, "refresh-delta.sh")
+expect("drift: an installed qa-response.yml caller is RETIRED, not CALLER (#460)",
+       run(r, "refresh-drift.sh"), 0, "RETIRED: .github/workflows/qa-response.yml — upstream retired this dispatch hook",
+       absent="CALLER: .github/workflows/qa-response.yml")
 # A retired guard script would otherwise read as the project's own script and be
 # kept in silence; a retired JSON input is outside every other glob (#460 step 2).
 r = project("drift-retired-guard", at=S_FILES, changes={

@@ -118,7 +118,6 @@
     "templates/scripts/check-contrast.js": { "domain": "design", "compartment": "guards", "class": "mechanical" },
     "directives/test.md": { "domain": "test", "compartment": "core", "class": "standard", "swap": "permanent" },
     "templates/workflows/qa.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
-    "templates/workflows/qa-response.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     ".github/workflows/shared-qa.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     ".github/workflows/shared-qa-response.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/actions/ui-suite/": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
@@ -159,7 +158,7 @@
     "plugins/directives-toolkit/evals/": { "domain": "meta", "compartment": "evals", "class": "standard" }
   },
   "externals": {
-    "_comment": "Vendor-owned capabilities this system depends on but does not contain \u2014 we hold only the sockets. To swap a vendor: rewire the listed socket files, never fork the vendor's code. serves = a domain.compartment some record under `paths` names. sockets = the files here that name/enable/configure it (must exist; validated).",
+    "_comment": "Vendor-owned capabilities this system depends on but does not contain \u2014 we hold only the sockets. To swap a vendor: rewire the listed socket files, never fork the vendor's code. serves = a domain.compartment some record under `paths` names. sockets = the files here that name/enable/configure it (must exist; validated). replaces = the retired homemade paths this native took over (#460 steps 1 and 3), so an audit sees why each one is gone. Two retired watchers have no native: pages-monitor.yml's deny-list check moved into shared-qa-live.yml, and watcher-liveness.yml watched only the other watchers.",
     "pr-review-toolkit": {
       "vendor": "Anthropic",
       "serves": "test.review",
@@ -208,6 +207,7 @@
     "codex-reviews": {
       "vendor": "GitHub",
       "serves": "git.lifecycle",
+      "replaces": [".github/workflows/codex-monitor.yml", "the codex-flagged label"],
       "sockets": [
         "directives/git.md",
         "docs/standards/pr-mechanics.md"
@@ -231,9 +231,31 @@
       "vendor": "Anthropic (Claude Code built-in tool)",
       "serves": "test.verify",
       "names": ["Agent"],
+      "replaces": ["plugins/directives-toolkit/commands/qa-pipeline.md"],
       "sockets": [
         "directives/test.md",
         "plugins/directives-toolkit/commands/sdd-loop.md"
+      ]
+    },
+    "github-actions-notifications": {
+      "vendor": "GitHub",
+      "serves": "git.lifecycle",
+      "note": "GitHub emails a failed run's actor on its own; with the PR subscription's failure event that is what ci-monitor.yml used to send.",
+      "replaces": [".github/workflows/ci-monitor.yml"],
+      "sockets": [
+        "CLAUDE.md",
+        "docs/standards/ci-triage.md",
+        "docs/internal/repo-monitors.md"
+      ]
+    },
+    "github-actions-rerun": {
+      "vendor": "GitHub",
+      "serves": "global.deploy",
+      "note": "Re-running a failed run (the Actions tab, or the session through the GitHub MCP) is what pages-retry.yml automated; shared-pages-deploy.yml keeps its own retry of the publish step.",
+      "replaces": [".github/workflows/pages-retry.yml"],
+      "sockets": [
+        "directives/global.md",
+        "plugins/directives-toolkit/skills/update-pages/SKILL.md"
       ]
     },
     "github-conversation-resolution": {
@@ -367,6 +389,7 @@
         "ScheduleWakeup",
         "SendUserFile"
       ],
+      "replaces": [".github/workflows/ci-monitor.yml", ".github/workflows/ci-notify.yml"],
       "sockets": [
         "directives/global.md",
         "directives/git.md",

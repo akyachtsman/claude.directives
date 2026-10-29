@@ -32,6 +32,15 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   because the only sessions that need the file are local ones holding
   credentials.
 - Treat MCP config as local session setup, not shared project state.
+- **In a Claude project thread, SQL containing `DELETE`, `DROP`, `UPDATE` or
+  `TRUNCATE` goes through the SQL Editor, not the connector** (trade,
+  2026-10-27). The connector asks its own approval question for any such SQL,
+  even when the word sits inside a function body or a `REVOKE`; a project thread
+  cannot show that question, so the call times out. Commit the migration as
+  usual, hand the owner its SQL unchanged to paste into the Supabase Dashboard's
+  SQL Editor, then verify the result with a read-only query through the
+  connector. The committed file stays the record (*Reversible-by-Design Backend
+  Changes*), since `list_migrations` does not list SQL run in the editor.
 
 ## Row-Level Security (RLS)
 - **RLS is always enabled** on every table. No table ships with RLS off.
@@ -113,6 +122,72 @@ records N/A.
    or policy). Each one is either fixed or recorded in the project CLAUDE.md
    security-constraints section (*Record accepted residuals* above). A deferral
    that lives only in a comment is a finding, not an accepted risk.
+
+## Supabase Defaults (owner ruling, 2026-10-27, from the prop and trade audits)
+A new Supabase project grants the browser roles more than any app uses, some of
+it out of the project's reach, and ships one Auth protection off. Every security
+audit of a Supabase backend runs the checks below, beside *Secret Columns*; a new
+project applies part 1 in its first migration.
+1. **Revoke the table privileges the browser never uses.** Supabase's default
+   privileges give `anon` and `authenticated` every privilege on each new table
+   in `public`, including `TRUNCATE`, `REFERENCES` and `TRIGGER`. `TRUNCATE`
+   empties a table without consulting row-level security (prop's audit), so a
+   correct policy does not cover it; PostgREST cannot send it, but anything that
+   runs SQL as those roles can. Revoke all three, now and for future tables,
+   in a migration whose header names the inverse (`GRANT` the same). Worked
+   example: prop's migration `0003_revoke_properties_truncate` (claude.prop#139)
+   revoked `TRUNCATE` on its one table, proven live by both roles getting
+   permission denied; the shape below also covers the other two and every
+   table created later:
+   ```sql
+   REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+   ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+     REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM anon, authenticated;
+   ```
+   On Postgres 17 or later, add `MAINTAIN` to both lists; older versions reject
+   the word. The migration contains `TRUNCATE`, so from a project thread it goes
+   through the SQL Editor (*MCP Configuration* above). The first check returns
+   no rows when existing tables hold:
+   ```sql
+   SELECT c.oid::regclass AS object, r.role, p.priv
+   FROM pg_class c
+   CROSS JOIN (VALUES ('anon'), ('authenticated')) r(role)
+   CROSS JOIN (VALUES ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) p(priv)
+   WHERE c.relnamespace = 'public'::regnamespace
+     AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+     AND has_table_privilege(r.role, c.oid, p.priv);
+   ```
+   That query sees only tables that exist, so a missed `ALTER DEFAULT
+   PRIVILEGES` passes it until the next table arrives. The second check reads
+   the defaults themselves and must return no rows too:
+   ```sql
+   SELECT a.grantee::regrole AS role, a.privilege_type
+   FROM pg_default_acl d, aclexplode(d.defaclacl) a
+   WHERE d.defaclrole = 'postgres'::regrole
+     AND d.defaclnamespace = 'public'::regnamespace
+     AND d.defaclobjtype = 'r'
+     AND a.grantee IN ('anon'::regrole, 'authenticated'::regrole)
+     AND a.privilege_type IN ('TRUNCATE', 'REFERENCES', 'TRIGGER');
+   ```
+2. **Record pg_net's queue as an accepted risk, with the rules that keep it
+   safe.** pg_net's `net.http_request_queue` holds each queued request's headers
+   (for a cron call, the secret decrypted from Vault) and carries a `PUBLIC`
+   grant owned by `supabase_admin`, which the project's `postgres` role cannot
+   revoke (trade's audit; every project with pg_net installed has it). It is
+   unreachable only while `net` is not an exposed API schema. So a project with
+   pg_net lists it in its CLAUDE.md security-constraints section (*Record
+   accepted residuals* above) together with these three rules, and the audit
+   confirms each still holds:
+   - never expose `net`, `extensions`, `cron` or `vault` through the Data API;
+   - never enable `pg_graphql` without re-running this audit first;
+   - never write a function in an exposed schema that reads `net.*`.
+   A project without pg_net records N/A.
+3. **Leaked-password protection, where the project uses Supabase Auth
+   passwords.** The security advisor flags it when off (prop's audit). It is a
+   Dashboard setting under Auth and needs the Pro plan or above: turn it on
+   where the plan has it; on the Free plan, record it as an accepted residual
+   rather than upgrading for it without the owner's ruling. A project without
+   Supabase Auth passwords (the PIN pattern above) records N/A.
 
 ## Reversible-by-Design Backend Changes
 Every Supabase change must be undoable by a later session with no memory of this

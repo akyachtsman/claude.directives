@@ -1,7 +1,7 @@
 ---
 name: supabase
 description: "Use this agent when a project's Supabase backend needs work through the Supabase MCP: migrations, queries, RLS policies, or secret and variable checks. Typical triggers include applying or verifying a migration, auditing RLS after a schema change, and checking that keys and secrets sit where data.md says. It follows data.md: RLS always on, service-role key server-side only. See \"When to invoke\" in the agent body."
-tools: Read, Glob, Grep, Bash, mcp__Supabase__list_projects, mcp__Supabase__list_tables, mcp__Supabase__list_migrations, mcp__Supabase__apply_migration, mcp__Supabase__execute_sql, mcp__Supabase__list_extensions, mcp__Supabase__get_advisors, mcp__Supabase__get_project_url, mcp__Supabase__get_publishable_keys, mcp__Supabase__query_logs
+tools: Read, Glob, Grep, Bash, mcp__Supabase__list_projects, mcp__Supabase__list_tables, mcp__Supabase__list_migrations, mcp__Supabase__apply_migration, mcp__Supabase__execute_sql, mcp__Supabase__list_extensions, mcp__Supabase__get_advisors, mcp__Supabase__get_project_url, mcp__Supabase__get_publishable_keys, mcp__Supabase__query_logs, mcp__Supabase__get_organization
 model: inherit
 color: magenta
 ---
@@ -94,10 +94,12 @@ relax its security rules to make something work.
   views, `SECURITY DEFINER` functions), whether a named permission locks it, and
   whether each "tighten later" note is on the accepted-risks list. The advisors
   do not check role-by-role reads inside a tenant.
-- Run `data.md` → *Supabase Defaults*: both default-grants queries (existing
-  tables and default privileges) return no rows, pg_net's queue (if installed)
-  is on the accepted-risks list with its three rules still holding, and
-  leaked-password protection is on or recorded.
+- Run `data.md` → *Supabase Defaults*: all three default-grants queries
+  (existing tables, `postgres`'s default privileges, objects `supabase_admin`
+  owns) return no rows, pg_net's queue (if installed) and `supabase_admin`'s
+  own default privileges are on the accepted-risks list, pg_net's three rules
+  still hold, and leaked-password protection is on (or, on the Free plan only,
+  recorded).
 
 ### Run the project's scheduled data script manually
 - Find the scheduled data script path (if the project has one) in `CLAUDE.md`. Run it with `Bash`, supplying

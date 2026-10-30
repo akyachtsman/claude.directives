@@ -46,6 +46,7 @@ recorded here with its date. It lives in:
 - [List any accepted security trade-offs, e.g. client-side token usage]
 - [List every "readable by all, tighten later" deferral here, or the security audit fails (`data.md` → *Secret Columns*)]
 - [If the project uses pg_net: its `net.http_request_queue` grant and the three rules that keep it safe (`data.md` → *Supabase Defaults*)]
+- [On Supabase: `supabase_admin`'s own default privileges in `public`, which `postgres` cannot revoke and which reach nothing while it owns no object there (`data.md` → *Supabase Defaults*)]
 
 ## Project-Specific Coding Standards
 - [Add project-specific rules here]

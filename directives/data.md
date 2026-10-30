@@ -32,18 +32,57 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   because the only sessions that need the file are local ones holding
   credentials.
 - Treat MCP config as local session setup, not shared project state.
-- **In a Claude project thread, SQL containing `DELETE`, `DROP`, `UPDATE` or
-  `TRUNCATE` goes through the connector first, with the SQL Editor as the
-  fallback.** Results differ by project: trade's call (2026-10-27) waited on an
-  approval question a project thread cannot show, and timed out; prop's and
-  insurance's `apply_migration` with `TRUNCATE` in its SQL succeeded with no
-  question (2026-10-29), and so did APFP's, which built the word inside an
-  `EXECUTE` string. So apply the committed migration through the connector; if
-  the call times out, hand the owner its SQL unchanged to paste into the
-  Supabase Dashboard's SQL Editor. Either way, verify with a read-only query through the
-  connector. After an editor paste, the committed file stays the record
-  (*Reversible-by-Design Backend Changes*), since `list_migrations` does not
-  list SQL run in the editor.
+- **Destructive SQL from a Claude project thread (measured 2026-10-30).** The
+  hosted Supabase MCP server pauses `execute_sql` and `apply_migration` with a
+  form question ("This SQL includes destructive operations ...") whenever its
+  detector fires: a statement that starts with `DROP`, `DELETE` or `TRUNCATE`,
+  an `ALTER TABLE ... DROP COLUMN`, an `UPDATE` with no `WHERE`, or an `EXECUTE`
+  of a string that starts so — statements inside a function or `DO` body
+  included, since the detector splits the text on `;`. A statement that starts
+  with `REVOKE` is not one, so the *Supabase Defaults* migration never asked
+  (prop, insurance, APFP and trade all applied it through the connector), and
+  building `TRUNCATE` inside an `EXECUTE` string changed nothing. The terminal
+  and a claude.ai chat draw the form and the owner answers it. A project
+  thread, a Cowork session and a Routine run Claude Code remotely: the client
+  tells the server it can show a form but has nowhere to draw it, so nobody
+  can answer and the call ends at the 60-second tool timeout ("The server asked
+  the user a question, and no answer came") — trade's `desk_024`, whose
+  function bodies hold `delete` (2026-10-27); reproduced in claude.directives
+  with a `delete ... where false` (2026-10-30); anthropics/claude-code#88901 and
+  #94806, open and unanswered. **The form stays (owner ruling, 2026-10-30):**
+  Supabase offers a `skip_elicitations` opt-out, and the owner declined it, so
+  no connector, hook or setting answers the form for him. A migration the
+  detector would stop is therefore never applied from a project thread. The
+  thread finishes everything else — the committed file in the PR, its header
+  and inverse, the scratch-database proof where the project keeps one — and
+  then hands the owner ONE line to paste into a claude.ai chat that has the
+  Supabase connector (or the Claude Code terminal with the project's
+  `.mcp.json`), of this shape: `Apply migration <path> from <owner>/<repo> at
+  <commit> to Supabase project "<name>" with apply_migration (name
+  <migration_name>), answer the confirmation, then report the result and run
+  <the header's check>.` The form appears there, the owner answers it, and
+  that session reports as the per-migration rule below says. The Dashboard's
+  SQL Editor is the fallback behind that (hand the owner the SQL unchanged);
+  after an editor paste the committed file stays the record, since
+  `list_migrations` does not list SQL run in the editor. Either way, the
+  thread verifies afterwards with a read-only query through the connector.
+  `execute_sql` is never the route for destructive SQL from any session.
+  **Never reword SQL to slip past the detector** (a `DROP` assembled from
+  pieces, say): the detector is a guardrail Supabase itself calls incomplete,
+  and dodging it is a knowing deviation (`global.md` → *A Knowing Deviation Is an Escalation*).
+- **Every destructive migration is asked for one at a time, and its result is
+  reported at once (owner ruling, 2026-10-30).** Before any session calls
+  `apply_migration` on SQL the detector above would stop, it asks the owner for
+  THAT migration — in its own words, before Supabase's form — naming the
+  migration file, the project, and the statements that make it destructive,
+  and it waits for the answer. A standing "go ahead", the approval of the PR,
+  or the owner's answer for another migration is not it: the form asks once
+  per call, and so does the session. The moment the call returns, before
+  anything else, the session posts Supabase's own result verbatim: the tool's
+  response (success, or its error text, or a decline), the `list_migrations`
+  row for the version it created, and the output of the read-only check the
+  migration's header names. A failure is reported the same way, in the same
+  message, not folded into a later summary.
 
 ## Row-Level Security (RLS)
 - **RLS is always enabled** on every table. No table ships with RLS off.
@@ -149,9 +188,10 @@ project applies part 1 in its first migration.
    ```
    On Postgres 17 or later, add `MAINTAIN` to both lists and to the checks
    below (Supabase grants it there too: prop, insurance and APFP, 2026-10-29);
-   older versions reject the word. The migration contains `TRUNCATE`, so from a
-   project thread the connector may time out on it; the SQL Editor is the
-   fallback (*MCP Configuration* above). A project gate that fails closed on `ALTER DEFAULT
+   older versions reject the word. The statements start with `REVOKE` and `ALTER
+   DEFAULT PRIVILEGES`, not `TRUNCATE`, so the connector's destructive-SQL
+   detector never fires on them (*MCP Configuration* above): apply the migration
+   through the connector from any session. A project gate that fails closed on `ALTER DEFAULT
    PRIVILEGES` (a migration privilege scanner, say) must accept this revoke-only
    form rather than block it (insurance, 2026-10-29). The first check returns
    no rows when existing tables hold:
@@ -231,7 +271,9 @@ one:
    desk_004").
 4. **Additive over destructive.** Prefer deprecating (rename, null, ignore) over
    DROP/DELETE. Anything that destroys data needs explicit owner approval before
-   it is applied to the live database — approval governs the operation, never
+   it is applied to the live database — asked for that one migration, and its
+   result reported the moment it returns (*MCP Configuration*, the per-migration
+   rule) — approval governs the operation, never
    the merge (`git.md` → *Conditional Auto-Merge on Green*) — and note that
    undo = backups/PITR only, not a migration.
 

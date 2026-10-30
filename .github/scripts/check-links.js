@@ -84,8 +84,9 @@ const URL_RE = /https:\/\/[^\s)>'"`]+/g;
 
 // Hosts that bot-protect or auth-gate plain curl (always non-2xx even when the
 // URL is valid). Checking them is pure noise — e.g. the claude.ai/code signature
-// link, and auth-gated MCP endpoints like Stitch's (require an API-key header).
-const SKIP_HOSTS = ['claude.ai', 'stitch.googleapis.com'];
+// link, and auth-gated MCP endpoints like Stitch's (require an API-key header)
+// and Supabase's hosted MCP server (OAuth; a plain GET is refused, #498).
+const SKIP_HOSTS = ['claude.ai', 'stitch.googleapis.com', 'mcp.supabase.com'];
 
 const urls = new Set();
 for (const file of MARKDOWN) {

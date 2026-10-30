@@ -1,7 +1,7 @@
 ---
 name: supabase
 description: "Use this agent when a project's Supabase backend needs work through the Supabase MCP: migrations, queries, RLS policies, or secret and variable checks. Typical triggers include applying or verifying a migration, auditing RLS after a schema change, and checking that keys and secrets sit where data.md says. It follows data.md: RLS always on, service-role key server-side only. See \"When to invoke\" in the agent body."
-tools: Read, Glob, Grep, Bash, mcp__Supabase__list_projects, mcp__Supabase__list_tables, mcp__Supabase__list_migrations, mcp__Supabase__apply_migration, mcp__Supabase__execute_sql, mcp__Supabase__list_extensions, mcp__Supabase__get_advisors, mcp__Supabase__get_project_url, mcp__Supabase__get_publishable_keys, mcp__Supabase__query_logs
+tools: Read, Glob, Grep, Bash, mcp__Supabase__list_projects, mcp__Supabase__list_tables, mcp__Supabase__list_migrations, mcp__Supabase__apply_migration, mcp__Supabase__execute_sql, mcp__Supabase__list_extensions, mcp__Supabase__get_advisors, mcp__Supabase__get_project_url, mcp__Supabase__get_publishable_keys, mcp__Supabase__query_logs, mcp__Supabase__get_organization
 model: inherit
 color: magenta
 ---

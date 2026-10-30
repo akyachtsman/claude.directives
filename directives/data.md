@@ -49,33 +49,40 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   the user a question, and no answer came") — trade's `desk_024`, whose
   function bodies hold `delete` (2026-10-27); reproduced in claude.directives
   with a `delete ... where false` (2026-10-30); anthropics/claude-code#88901 and
-  #94806, open and unanswered. The way through is Supabase's own documented
-  opt-out, set once by the owner on the claude.ai connector (*Supabase
-  connector setup* below): with `skip_elicitations=apply_migration`, a
-  committed migration applies from a thread with no question. The approval the
-  form stood for is the owner's go-ahead in the thread, which
-  *Reversible-by-Design Backend Changes* requires whether or not a form
-  appears. `execute_sql` keeps the form, so ad hoc destructive SQL still cannot
-  run from a thread: put it in a migration, or hand the owner the SQL unchanged
-  to paste into the Supabase Dashboard's SQL Editor; after an editor paste the
-  committed file stays the record, since `list_migrations` does not list SQL
-  run in the editor. Either way, verify with a read-only query through the
-  connector. **Never reword SQL to slip past the detector** (a `DROP` assembled
-  from pieces, say): the detector is a guardrail Supabase itself calls
-  incomplete, and dodging it is a knowing deviation (`global.md` → *A Knowing Deviation Is an Escalation*).
-- **Supabase connector setup (owner, once per claude.ai account; ruling
-  2026-10-30).** The Supabase connector every project thread uses is a
-  **custom** connector named exactly `Supabase` — the name is the tool prefix,
-  so `mcp__Supabase__*` keeps resolving in the toolkit's agent and settings —
-  with the URL `https://mcp.supabase.com/mcp?skip_elicitations=apply_migration`
-  in place of the directory entry. Supabase documents the parameter for its
-  hosted server (its MCP docs page, "Skip form confirmations"); it names tools, is
-  case-sensitive, and has no `all`. Do not add `execute_sql` to it: that
-  removes the last server-side check on ad hoc SQL from a thread. A terminal
-  session's `.mcp.json` carries no such parameter, so the form still shows
-  there. Proof that the setup holds: a thread applies a committed migration
-  holding a `DROP ... IF EXISTS` through `apply_migration` and gets a result,
-  not a timeout.
+  #94806, open and unanswered. **The form stays (owner ruling, 2026-10-30):**
+  Supabase offers a `skip_elicitations` opt-out, and the owner declined it, so
+  no connector, hook or setting answers the form for him. A migration the
+  detector would stop is therefore never applied from a project thread. The
+  thread finishes everything else — the committed file in the PR, its header
+  and inverse, the scratch-database proof where the project keeps one — and
+  then hands the owner ONE line to paste into a claude.ai chat that has the
+  Supabase connector (or the Claude Code terminal with the project's
+  `.mcp.json`), of this shape: `Apply migration <path> from <owner>/<repo> at
+  <commit> to Supabase project "<name>" with apply_migration (name
+  <migration_name>), answer the confirmation, then report the result and run
+  <the header's check>.` The form appears there, the owner answers it, and
+  that session reports as the per-migration rule below says. The Dashboard's
+  SQL Editor is the fallback behind that (hand the owner the SQL unchanged);
+  after an editor paste the committed file stays the record, since
+  `list_migrations` does not list SQL run in the editor. Either way, the
+  thread verifies afterwards with a read-only query through the connector.
+  `execute_sql` is never the route for destructive SQL from any session.
+  **Never reword SQL to slip past the detector** (a `DROP` assembled from
+  pieces, say): the detector is a guardrail Supabase itself calls incomplete,
+  and dodging it is a knowing deviation (`global.md` → *A Knowing Deviation Is an Escalation*).
+- **Every destructive migration is asked for one at a time, and its result is
+  reported at once (owner ruling, 2026-10-30).** Before any session calls
+  `apply_migration` on SQL the detector above would stop, it asks the owner for
+  THAT migration — in its own words, before Supabase's form — naming the
+  migration file, the project, and the statements that make it destructive,
+  and it waits for the answer. A standing "go ahead", the approval of the PR,
+  or the owner's answer for another migration is not it: the form asks once
+  per call, and so does the session. The moment the call returns, before
+  anything else, the session posts Supabase's own result verbatim: the tool's
+  response (success, or its error text, or a decline), the `list_migrations`
+  row for the version it created, and the output of the read-only check the
+  migration's header names. A failure is reported the same way, in the same
+  message, not folded into a later summary.
 
 ## Row-Level Security (RLS)
 - **RLS is always enabled** on every table. No table ships with RLS off.
@@ -264,7 +271,9 @@ one:
    desk_004").
 4. **Additive over destructive.** Prefer deprecating (rename, null, ignore) over
    DROP/DELETE. Anything that destroys data needs explicit owner approval before
-   it is applied to the live database — approval governs the operation, never
+   it is applied to the live database — asked for that one migration, and its
+   result reported the moment it returns (*MCP Configuration*, the per-migration
+   rule) — approval governs the operation, never
    the merge (`git.md` → *Conditional Auto-Merge on Green*) — and note that
    undo = backups/PITR only, not a migration.
 

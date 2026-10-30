@@ -73,10 +73,11 @@ relax its security rules to make something work.
 - Apply changes with `apply_migration` (named, versioned) once an invocation
   authorizes them (Operating Rules), never in the run that drafts them.
   The connector asks its own form question on `DROP`, `DELETE`, `TRUNCATE`
-  and `UPDATE` without `WHERE`; a remote session cannot answer it, and the
-  owner's connector setup skips it for `apply_migration` only — so destructive
-  SQL goes in a migration, never through `execute_sql`, and is never reworded
-  to dodge the check (`data.md` → *MCP Configuration*). Include the RLS
+  and `UPDATE` without `WHERE`; a remote session cannot answer it, and by
+  owner ruling nothing answers it for him — so such a migration is never
+  applied from a project thread: the caller hands the owner the one-line
+  paste for a chat or terminal session, and the SQL is never reworded to
+  dodge the check (`data.md` → *MCP Configuration*). Include the RLS
   `enable` statement and policies in the same migration as the table.
 - Re-list afterward to confirm the migration registered and the objects exist.
 

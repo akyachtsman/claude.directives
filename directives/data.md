@@ -32,18 +32,50 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   because the only sessions that need the file are local ones holding
   credentials.
 - Treat MCP config as local session setup, not shared project state.
-- **In a Claude project thread, SQL containing `DELETE`, `DROP`, `UPDATE` or
-  `TRUNCATE` goes through the connector first, with the SQL Editor as the
-  fallback.** Results differ by project: trade's call (2026-10-27) waited on an
-  approval question a project thread cannot show, and timed out; prop's and
-  insurance's `apply_migration` with `TRUNCATE` in its SQL succeeded with no
-  question (2026-10-29), and so did APFP's, which built the word inside an
-  `EXECUTE` string. So apply the committed migration through the connector; if
-  the call times out, hand the owner its SQL unchanged to paste into the
-  Supabase Dashboard's SQL Editor. Either way, verify with a read-only query through the
-  connector. After an editor paste, the committed file stays the record
-  (*Reversible-by-Design Backend Changes*), since `list_migrations` does not
-  list SQL run in the editor.
+- **Destructive SQL from a Claude project thread (measured 2026-10-30).** The
+  hosted Supabase MCP server pauses `execute_sql` and `apply_migration` with a
+  form question ("This SQL includes destructive operations ...") whenever its
+  detector fires: a statement that starts with `DROP`, `DELETE` or `TRUNCATE`,
+  an `ALTER TABLE ... DROP COLUMN`, an `UPDATE` with no `WHERE`, or an `EXECUTE`
+  of a string that starts so — statements inside a function or `DO` body
+  included, since the detector splits the text on `;`. A statement that starts
+  with `REVOKE` is not one, so the *Supabase Defaults* migration never asked
+  (prop, insurance, APFP and trade all applied it through the connector), and
+  building `TRUNCATE` inside an `EXECUTE` string changed nothing. The terminal
+  and a claude.ai chat draw the form and the owner answers it. A project
+  thread, a Cowork session and a Routine run Claude Code remotely: the client
+  tells the server it can show a form but has nowhere to draw it, so nobody
+  can answer and the call ends at the 60-second tool timeout ("The server asked
+  the user a question, and no answer came") — trade's `desk_024`, whose
+  function bodies hold `delete` (2026-10-27); reproduced in claude.directives
+  with a `delete ... where false` (2026-10-30); anthropics/claude-code#88901 and
+  #94806, open and unanswered. The way through is Supabase's own documented
+  opt-out, set once by the owner on the claude.ai connector (*Supabase
+  connector setup* below): with `skip_elicitations=apply_migration`, a
+  committed migration applies from a thread with no question. The approval the
+  form stood for is the owner's go-ahead in the thread, which
+  *Reversible-by-Design Backend Changes* requires whether or not a form
+  appears. `execute_sql` keeps the form, so ad hoc destructive SQL still cannot
+  run from a thread: put it in a migration, or hand the owner the SQL unchanged
+  to paste into the Supabase Dashboard's SQL Editor; after an editor paste the
+  committed file stays the record, since `list_migrations` does not list SQL
+  run in the editor. Either way, verify with a read-only query through the
+  connector. **Never reword SQL to slip past the detector** (a `DROP` assembled
+  from pieces, say): the detector is a guardrail Supabase itself calls
+  incomplete, and dodging it is a knowing deviation (`global.md` → *A Knowing Deviation Is an Escalation*).
+- **Supabase connector setup (owner, once per claude.ai account; ruling
+  2026-10-30).** The Supabase connector every project thread uses is a
+  **custom** connector named exactly `Supabase` — the name is the tool prefix,
+  so `mcp__Supabase__*` keeps resolving in the toolkit's agent and settings —
+  with the URL `https://mcp.supabase.com/mcp?skip_elicitations=apply_migration`
+  in place of the directory entry. Supabase documents the parameter for its
+  hosted server (its MCP docs page, "Skip form confirmations"); it names tools, is
+  case-sensitive, and has no `all`. Do not add `execute_sql` to it: that
+  removes the last server-side check on ad hoc SQL from a thread. A terminal
+  session's `.mcp.json` carries no such parameter, so the form still shows
+  there. Proof that the setup holds: a thread applies a committed migration
+  holding a `DROP ... IF EXISTS` through `apply_migration` and gets a result,
+  not a timeout.
 
 ## Row-Level Security (RLS)
 - **RLS is always enabled** on every table. No table ships with RLS off.
@@ -149,9 +181,10 @@ project applies part 1 in its first migration.
    ```
    On Postgres 17 or later, add `MAINTAIN` to both lists and to the checks
    below (Supabase grants it there too: prop, insurance and APFP, 2026-10-29);
-   older versions reject the word. The migration contains `TRUNCATE`, so from a
-   project thread the connector may time out on it; the SQL Editor is the
-   fallback (*MCP Configuration* above). A project gate that fails closed on `ALTER DEFAULT
+   older versions reject the word. The statements start with `REVOKE` and `ALTER
+   DEFAULT PRIVILEGES`, not `TRUNCATE`, so the connector's destructive-SQL
+   detector never fires on them (*MCP Configuration* above): apply the migration
+   through the connector from any session. A project gate that fails closed on `ALTER DEFAULT
    PRIVILEGES` (a migration privilege scanner, say) must accept this revoke-only
    form rather than block it (insurance, 2026-10-29). The first check returns
    no rows when existing tables hold:

@@ -33,14 +33,17 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   credentials.
 - Treat MCP config as local session setup, not shared project state.
 - **In a Claude project thread, SQL containing `DELETE`, `DROP`, `UPDATE` or
-  `TRUNCATE` goes through the SQL Editor, not the connector** (trade,
-  2026-10-27). The connector asks its own approval question for any such SQL,
-  even when the word sits inside a function body or a `REVOKE`; a project thread
-  cannot show that question, so the call times out. Commit the migration as
-  usual, hand the owner its SQL unchanged to paste into the Supabase Dashboard's
-  SQL Editor, then verify the result with a read-only query through the
-  connector. The committed file stays the record (*Reversible-by-Design Backend
-  Changes*), since `list_migrations` does not list SQL run in the editor.
+  `TRUNCATE` goes through the connector first, with the SQL Editor as the
+  fallback.** Results differ by project: trade's call (2026-10-27) waited on an
+  approval question a project thread cannot show, and timed out; prop's and
+  insurance's `apply_migration` with `TRUNCATE` in its SQL succeeded with no
+  question (2026-10-29), and so did APFP's, which built the word inside an
+  `EXECUTE` string. So apply the committed migration through the connector; if
+  the call times out, hand the owner its SQL unchanged to paste into the
+  Supabase Dashboard's SQL Editor. Either way, verify with a read-only query through the
+  connector. After an editor paste, the committed file stays the record
+  (*Reversible-by-Design Backend Changes*), since `list_migrations` does not
+  list SQL run in the editor.
 
 ## Row-Level Security (RLS)
 - **RLS is always enabled** on every table. No table ships with RLS off.
@@ -144,9 +147,13 @@ project applies part 1 in its first migration.
    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
      REVOKE TRUNCATE, REFERENCES, TRIGGER ON TABLES FROM anon, authenticated;
    ```
-   On Postgres 17 or later, add `MAINTAIN` to both lists; older versions reject
-   the word. The migration contains `TRUNCATE`, so from a project thread it goes
-   through the SQL Editor (*MCP Configuration* above). The first check returns
+   On Postgres 17 or later, add `MAINTAIN` to both lists and to the checks
+   below (Supabase grants it there too: prop, insurance and APFP, 2026-10-29);
+   older versions reject the word. The migration contains `TRUNCATE`, so from a
+   project thread the connector may time out on it; the SQL Editor is the
+   fallback (*MCP Configuration* above). A project gate that fails closed on `ALTER DEFAULT
+   PRIVILEGES` (a migration privilege scanner, say) must accept this revoke-only
+   form rather than block it (insurance, 2026-10-29). The first check returns
    no rows when existing tables hold:
    ```sql
    SELECT c.oid::regclass AS object, r.role, p.priv
@@ -169,6 +176,25 @@ project applies part 1 in its first migration.
      AND a.grantee IN ('anon'::regrole, 'authenticated'::regrole)
      AND a.privilege_type IN ('TRUNCATE', 'REFERENCES', 'TRIGGER');
    ```
+   The query reads only `postgres`'s defaults, on purpose. `supabase_admin`
+   keeps default privileges of its own in `public` that grant the browser roles
+   everything on tables it creates, and `postgres` is not a member of
+   `supabase_admin`, so it cannot revoke them (prop, insurance and APFP,
+   2026-10-29). Without the filter the query returns those rows; they are an
+   accepted residual, recorded in the project CLAUDE.md beside the pg_net entry,
+   not a finding to chase. They reach nothing while `supabase_admin` owns no
+   object in `public`, so the third check confirms that, and returns no rows
+   when it holds:
+   ```sql
+   SELECT c.oid::regclass AS object, c.relkind
+   FROM pg_class c
+   WHERE c.relnamespace = 'public'::regnamespace
+     AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+     AND c.relowner = 'supabase_admin'::regrole;
+   ```
+   A row is a finding to raise with the owner, not to fix in a migration: the
+   object's grants are `supabase_admin`'s, so `postgres` cannot revoke them
+   either.
 2. **Record pg_net's queue as an accepted risk, with the rules that keep it
    safe.** pg_net's `net.http_request_queue` holds each queued request's headers
    (for a cron call, the secret decrypted from Vault) and carries a `PUBLIC`
@@ -184,10 +210,12 @@ project applies part 1 in its first migration.
    A project without pg_net records N/A.
 3. **Leaked-password protection, where the project uses Supabase Auth
    passwords.** The security advisor flags it when off (prop's audit). It is a
-   Dashboard setting under Auth and needs the Pro plan or above: turn it on
-   where the plan has it; on the Free plan, record it as an accepted residual
-   rather than upgrading for it without the owner's ruling. A project without
-   Supabase Auth passwords (the PIN pattern above) records N/A.
+   Dashboard setting under Auth and needs the Pro plan or above. Read the
+   organization's plan with the connector's `get_organization` rather than
+   guessing it: on Pro or above the setting is the owner's to switch on, and
+   stays a finding until it is; on the Free plan, record it as an accepted
+   residual rather than upgrading for it without the owner's ruling. A project
+   without Supabase Auth passwords (the PIN pattern above) records N/A.
 
 ## Reversible-by-Design Backend Changes
 Every Supabase change must be undoable by a later session with no memory of this

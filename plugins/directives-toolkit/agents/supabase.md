@@ -94,10 +94,12 @@ relax its security rules to make something work.
   views, `SECURITY DEFINER` functions), whether a named permission locks it, and
   whether each "tighten later" note is on the accepted-risks list. The advisors
   do not check role-by-role reads inside a tenant.
-- Run `data.md` → *Supabase Defaults*: both default-grants queries (existing
-  tables and default privileges) return no rows, pg_net's queue (if installed)
-  is on the accepted-risks list with its three rules still holding, and
-  leaked-password protection is on or recorded.
+- Run `data.md` → *Supabase Defaults*: all three default-grants queries
+  (existing tables, `postgres`'s default privileges, objects `supabase_admin`
+  owns) return no rows, pg_net's queue (if installed) and `supabase_admin`'s
+  own default privileges are on the accepted-risks list, pg_net's three rules
+  still hold, and leaked-password protection is on (or, on the Free plan only,
+  recorded).
 
 ### Run the project's scheduled data script manually
 - Find the scheduled data script path (if the project has one) in `CLAUDE.md`. Run it with `Bash`, supplying

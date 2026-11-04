@@ -23,7 +23,8 @@ Execute in order:
    mid-session either way. A request targeting a different repo is answered by
    naming the repo it belongs to and doing none of it here, never by adding it.
    It reaches that repo's own session by a direct message (heads-up to the owner
-   first) or a paste-ready hand-off (`global.md` → *One Session, One Repo*).
+   first) or a paste-ready hand-off (`global.md` → *One Session, One Repo*);
+   a report for claude.directives goes in an issue there (`global.md` → *Reports to claude.directives Go in an Issue*).
 
 3. **READ scope is a different thing — and it is never restricted for public
    repos.** Raw URLs (`raw.githubusercontent.com`) for files and git transport

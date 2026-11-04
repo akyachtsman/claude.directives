@@ -276,21 +276,26 @@ probes.
 ## Downstream-Finding Loop
 
 The standing procedure when a project session surfaces a bug, gap, or
-improvement that belongs upstream. Findings propagate **upstream by message,
-never by cross-repo edits** (`global.md` → One Session, One Repo). The message
-travels either way: you paste a hand-off, or the session sends it straight to the
-target session and tells you first (owner ruling, 2026-10-06):
+improvement that belongs upstream. Findings propagate **upstream by issue,
+never by cross-repo edits** (`global.md` → *Reports to claude.directives Go in an Issue*,
+owner ruling 2026-11-04). The project session opens an issue on this repo and
+tells you; a paste-ready hand-off is the fallback when it cannot open one or the
+report holds something that must not be public:
 
-1. **Capture** — the downstream session emits a hand-off block
+1. **Capture** — the downstream session opens an issue here, titled
+   `<project repo>: <finding>`, or, as the fallback, emits a hand-off block
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT).
    A finding that names an upstream file must **pin its claim to a SHA, and
    re-verify at the moment of asserting rather than of fetching** — upstream
    moves inside a session, so a correct fetch can be stale by the time the report
    is written. Read the file's **header comments** first: they often record the
    reported behaviour as a deliberate trade-off.
-2. **Relay** — one of two routes. Either the downstream session sends it
-   straight to a `claude.directives` session it knows, telling you first, or you
-   paste it into one. Either way the receiving session analyses before it acts. The session verifies legitimacy against git history and
+2. **Pick up** — nothing watches for new issues. Say `check issues` in the
+   directives project; that session reads the open issues opened by your
+   account and names any other to you. A fallback hand-off arrives as before:
+   you paste it in, or the downstream session sends it straight to a
+   `claude.directives` session and tells you first.
+   Either way the receiving session analyses before it acts. The session verifies legitimacy against git history and
    live state before implementing (`global.md` → *Behavior Rules* → evidence before assertions —
    downstream reports have been wrong before). Before dismissing one as stale,
    check what `main` held at the SHA the reporter names: a finding correct at
@@ -303,9 +308,10 @@ target session and tells you first (owner ruling, 2026-10-06):
    the session to merge **when the run emits a wake at all** (see the scheduling
    bullet below); otherwise arm a check-in.
 5. **Propagate** — run HUMAN STEPS above for the modes the PR touched.
-6. **Close the loop** — the prepared reply goes back to the reporting session,
-   pasted by you or sent directly with a heads-up, so it can proceed with
-   corrected instructions.
+6. **Close the loop** — the session comments the outcome on the issue and
+   closes it. Anything the reporting project must do next goes back as a
+   prepared reply, pasted by you or sent directly with a heads-up, so it can
+   proceed with corrected instructions.
 
 ## Environment Maintenance
 

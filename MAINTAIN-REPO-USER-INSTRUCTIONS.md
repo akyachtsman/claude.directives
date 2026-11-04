@@ -160,8 +160,9 @@ Corollaries worth memorizing:
    (*Releasing the shared workflows*, below). Until you do, no project runs
    the change.
 6. **Referenced only** → done.
-7. If the change closes out a downstream finding, paste the prepared reply
-   back into the session that reported it (see the loop below).
+7. If the change closes out a downstream finding, the session opens a
+   `for:<project repo>` issue with what that project must do; you send
+   `check directives issues` in that project (see the loop below).
 
 ## Releasing the shared workflows (Phase F of #460 step 4)
 
@@ -276,13 +277,14 @@ probes.
 ## Downstream-Finding Loop
 
 The standing procedure when a project session surfaces a bug, gap, or
-improvement that belongs upstream. Findings propagate **upstream by issue,
-never by cross-repo edits** (`global.md` → *Reports to claude.directives Go in an Issue*,
-owner ruling 2026-11-04). The project session opens an issue on this repo and
-tells you; a paste-ready hand-off is the fallback when it cannot open one or the
-report holds something that must not be public:
+improvement that belongs upstream. Messages travel **by issue on this repo,
+both ways, never by cross-repo edits** (`global.md` → *Projects and claude.directives Talk in Issues*,
+owner rulings 2026-11-04). A project's report is labelled `from:<project repo>`;
+work sent back to it is labelled `for:<project repo>`. Your part is one line in
+the receiving project each time. A paste-ready hand-off is the fallback when an
+issue cannot be opened or the message holds something that must not be public:
 
-1. **Capture** — the downstream session opens an issue here, titled
+1. **Capture** — the downstream session opens a `from:` issue here, titled
    `<project repo>: <finding>`, or, as the fallback, emits a hand-off block
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT).
    A finding that names an upstream file must **pin its claim to a SHA, and
@@ -291,8 +293,8 @@ report holds something that must not be public:
    is written. Read the file's **header comments** first: they often record the
    reported behaviour as a deliberate trade-off.
 2. **Pick up** — nothing watches for new issues. Say `check issues` in the
-   directives project; that session reads the open issues opened by your
-   account and names any other to you. A fallback hand-off arrives as before:
+   directives project; that session reads the open `from:` issues opened by
+   your account and names any other to you. A fallback hand-off arrives as before:
    you paste it in, or the downstream session sends it straight to a
    `claude.directives` session and tells you first.
    Either way the receiving session analyses before it acts. The session verifies legitimacy against git history and
@@ -308,10 +310,11 @@ report holds something that must not be public:
    the session to merge **when the run emits a wake at all** (see the scheduling
    bullet below); otherwise arm a check-in.
 5. **Propagate** — run HUMAN STEPS above for the modes the PR touched.
-6. **Close the loop** — the session comments the outcome on the issue and
-   closes it. Anything the reporting project must do next goes back as a
-   prepared reply, pasted by you or sent directly with a heads-up, so it can
-   proceed with corrected instructions.
+6. **Close the loop** — the session comments the outcome on the `from:` issue
+   and closes it. Anything the reporting project must do next goes in a new
+   `for:<project repo>` issue. Say `check directives issues` in that project:
+   it does the work in its own repo, comments the result on the issue and
+   closes it. Your next `check issues` here lists those results.
 
 ## Environment Maintenance
 

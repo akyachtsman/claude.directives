@@ -50,7 +50,7 @@ const page = await open({ width: 1280, height: 800 });
   const unknown = await page.evaluate(() => { try { House.icon('nope'); return 'no throw'; } catch (e) { return e.message; } });
   check(/no icon named "nope"/.test(unknown), 'an icon the set lacks throws instead of drawing nothing', unknown);
   const set = await page.evaluate(() => House.icons);
-  const need = ['plus', 'pencil', 'archive', 'trash', 'x', 'more-vertical', 'upload', 'paperclip', 'camera', 'download', 'search', 'lock', 'star', 'grip', 'arrow-left'];
+  const need = ['plus', 'pencil', 'archive', 'trash', 'x', 'more-vertical', 'upload', 'paperclip', 'camera', 'download', 'search', 'lock', 'lock-open', 'star', 'grip', 'arrow-left', 'undo', 'redo'];
   const missing = need.filter(n => !set.includes(n));
   check(!missing.length, 'the icon set covers every act in design.md §3', missing.join(', '));
 }

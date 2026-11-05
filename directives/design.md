@@ -185,11 +185,13 @@ content, never as an action's icon.
 | Photo | camera, with the word **Photo** | |
 | Download | down arrow into a tray | |
 | Search | magnifying glass inside the field | |
-| Lock: "you cannot change this" | padlock | that meaning only; a permission note ("Only a manager can see …") is words |
+| Lock: "you cannot change this" | padlock | that meaning only, apart from the lock toggle below; a permission note ("Only a manager can see …") is words |
+| Lock toggle: lock or unlock a thing the person may change | padlock (`lock`) while locked, open padlock (`lock-open`) while unlocked | one button with `aria-pressed` (pressed = locked); its `aria-label` and `title` name the act ("Lock price") |
 | Favourite | star, outline / filled | |
 | Reorder by dragging | ⋮⋮ grip | |
 | Sort direction | ▲ ascending / ▼ descending | |
 | Back | ← | section 11 |
+| Undo / Redo | curved arrow back (`undo`) / forward (`redo`) | a product-wide undo only (section 19) |
 
 **Every icon-only button has both `aria-label` and `title`** naming the act and
 the thing ("Archive Walk-in fridge").

@@ -22,6 +22,8 @@ domain is permanent, so its commands and guards gain a native authority, never a
 replacement. Record every native evaluated and declined in `EXPORTS.json` →
 `considered`, so the next pass reads the verdict instead of re-deriving it.
 
+**`docs/standards/inboxes.md` is chat.GIT's file (owner ruling, 2026-11-12).** Neither side gets access to the other's repo: keep it word for word, change it only with text chat.GIT sends, and if this repo's checks need a change, ask chat.GIT first (its *Upkeep of this file*).
+
 ## Layout
 | Path | Role |
 |------|------|

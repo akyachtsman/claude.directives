@@ -163,6 +163,8 @@ its wrongness has no way to reach anyone. Any operating procedure two sessions
 depend on belongs in a file under `docs/standards/`, not in the message that
 first explained it.
 
+**Project mailboxes** (one Drive mailbox per project, across both realms): [`inboxes.md`](inboxes.md).
+
 ---
 
 ## Activation Checklist for New Sessions

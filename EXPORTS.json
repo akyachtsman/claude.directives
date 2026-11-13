@@ -109,6 +109,7 @@
     "templates/scripts/package.json": { "domain": "git", "compartment": "automation", "class": "mechanical" },
     "docs/guides/cron-email-notifications.md": { "domain": "git", "compartment": "automation", "class": "reference" },
     "docs/standards/automations.md": { "domain": "git", "compartment": "setup", "class": "standard", "swap": "permanent" },
+    "docs/standards/inboxes.md": { "domain": "git", "compartment": "setup", "class": "standard", "swap": "permanent" },
     "docs/standards/cicd-setup.md": { "domain": "git", "compartment": "setup", "class": "standard", "swap": "permanent" },
     "directives/design.md": { "domain": "design", "compartment": "method", "class": "standard", "swap": "permanent" },
     "plugins/directives-toolkit/commands/design-intake.md": { "domain": "design", "compartment": "method", "class": "behavioral" },

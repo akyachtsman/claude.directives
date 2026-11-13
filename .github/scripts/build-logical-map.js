@@ -131,7 +131,7 @@ const PLACE = {
     'docs/standards/ci-triage.md', 'docs/standards/cicd-setup.md'],
   ship: [`${P}/skills/update-pages/`, 'docs/standards/hosting-mechanics.md',
     'templates/workflows/pages-deploy.yml', '.github/workflows/shared-pages-deploy.yml',
-    'docs/standards/automations.md'],
+    'docs/standards/automations.md', 'docs/standards/inboxes.md'],
   // scripts/ sits here, not under pr: besides the guard scripts the hooks run
   // from session start, it carries /refresh-repo's Phase 3 (refresh-stamp.sh)
   // and the script derivation both phases run (derive-scripts.sh),
@@ -438,6 +438,7 @@ const FLOW = [
   ['global.md', '/commit-chk', 'gov', 'verifies with'],
   ['global.md', 'hosting-mechanics.md', 'det', 'details in'],
   ['global.md', 'automations.md', 'det', 'details in'],
+  ['automations.md', 'inboxes.md', 'det', 'project mailboxes: details in', 'a', 'Project mailboxes'],
   ['global.md', 'pages-deploy.yml', 'gov', 'requires (Actions-source only)'],
   ['global.md', 'qa.yml', 'gov', 'requires'],
   ['global.md', 'qa-live.yml', 'gov', 'requires'],

@@ -42,6 +42,12 @@ recorded here with its date. It lives in:
 |---|---|
 | Validate HTML | `npm_config_legacy_peer_deps=true npx html-validate index.html` (the env var stops npm 10 crashing on html-validate's optional peers since vitest 5.0.5; with a `Build:`: run the build, then validate the generated HTML under `SITE_DIR`, never the source root) |
 
+## Opus-Start List
+Per `global.md` → *Token Cost and Session Models*: every thread starts on Sonnet 5.5
+unless its job is on this list, and whoever starts the thread picks its model then.
+- [fill in: the jobs where being wrong costs more than the model does — or write
+  "none" to keep every thread on Sonnet 5.5]
+
 ## Project-Specific Security Constraints
 - [List any accepted security trade-offs, e.g. client-side token usage]
 - [List every "readable by all, tighten later" deferral here, or the security audit fails (`data.md` → *Secret Columns*)]

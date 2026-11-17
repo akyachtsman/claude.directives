@@ -61,6 +61,8 @@ is added by the pass that finds it.
 | How a sub-agent's model is chosen (call, frontmatter, env var, fork) | `global.md` → *Subagent Model Selection* | 2026-10-11 | code.claude.com/docs/en/sub-agents |
 | Agent frontmatter `model:` field | `plugins/directives-toolkit/agents/test-verifier.md` | 2026-10-11 | code.claude.com/docs/en/sub-agents |
 | Sub-agents spawning sub-agents (nesting depth limit) | `directives/test.md` → *QA before merge* | 2026-10-11 | code.claude.com/docs/en/sub-agents, section "Let subagents spawn their own subagents" |
+| Model ids and the session-model defaults they name (`claude-sonnet-5-5`) | `global.md` → *Token Cost and Session Models* | 2026-11-17 | The Environment block of a web session's system prompt (it lists the current model ids) |
+| Prompt-cache economics: cached read about 1/40 of a write, cache lapsing after an hour idle, compaction at about 384k tokens | `global.md` → *Token Cost and Session Models*; `docs/standards/session-mechanics.md` → *Token cost* | never verified; first entered 2026-11-17 (owner-reported measurement, 2026-11-16) | Load the built-in `claude-api` skill and read its prompt-caching prices and TTLs; ⏳ for the compaction point, the next thread that compacts |
 | Sub-agent nesting in this cloud environment (`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` is set to 1 in the process environment, in no settings file) | `directives/test.md` → *QA before merge*; `EXPORTS.json` → `considered.workflow-authoring` | 2026-10-12 | `env` piped to `grep SPAWN_DEPTH` in a top-level web session (the 2026-10-12 reading came from a child session). If the variable is gone or above 1, nesting is back and the QA sequence could run inside one agent |
 
 ## Claude Code & cloud sessions

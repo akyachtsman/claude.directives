@@ -170,6 +170,15 @@ and re-run the negatives whenever a description is widened. It costs real tokens
 and is NOT in CI. How the cases are built, what the score and Δ mean, the Claude
 Code version it needs and the measured baseline: `docs/internal/skill-eval-notes.md`.
 
+## Opus-Start List (owner ruling, 2026-11-16)
+`global.md` → *Token Cost and Session Models* applies here unchanged: this
+project's coordinator runs Sonnet 5.5, and a thread starts on Sonnet 5.5 unless
+its job is one of these, which start on Opus:
+- CI and workflow redesign
+- Cross-repo rule rewrites
+
+Everything else (refresh PRs, UI moves, docs, config, PR upkeep) stays on Sonnet.
+
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, run `qa.yml`'s `validate` job locally. The runner
 reads the steps out of the workflow, so there is no list here to keep in sync

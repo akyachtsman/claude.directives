@@ -2,8 +2,8 @@
 
 The reasoning, mechanism, measurements and history behind session-behaviour
 rules in `directives/global.md` — *Behavior Rules*, *Parallel Tasking via
-Subagents*, *Async Operations*, *Scheduling Tools Never Prompt* and *A Blocked
-Command Is Not a Blocked Capability*. The rules themselves are stated there, and
+Subagents*, *Token Cost and Session Models*, *Async Operations*, *Scheduling
+Tools Never Prompt* and *A Blocked Command Is Not a Blocked Capability*. The rules themselves are stated there, and
 that is the copy every project reads at session start; this file is read on
 demand, when a rule needs its evidence or its edge cases, and does not restate
 them — each section names the rule it supports. The passages here were
@@ -148,3 +148,24 @@ sparse-checkout state are, which refspec the clone maps, what is gitignored.
 Each of those silently breaks a different plausible check. Work it out against
 the repository in front of you; a procedure copied from a directive that cannot
 see your remotes is how you find out by running a gate against the wrong bytes.
+
+## Token cost
+
+*Supports:* `directives/global.md` → *Token Cost and Session Models* — the five rules and the model defaults.
+
+Every tool call re-sends the whole thread, so a thread's cost is not its own
+work but the sum of every re-read. Cached tokens are read at about 1/40 of
+their write cost, which is why a long thread of many small calls stays cheap
+while it is warm. The cache lapses after an hour idle, and the next wake
+rewrites the whole thread at full write price. Measured on chat projects
+(owner, 2026-11-16): cache writes were about half of spend and re-reads about a
+third. The rules follow from that:
+- One job per thread, and no resuming of a cold thread, agent or reviewer,
+  because a cold resume pays the full rewrite for history the new request may
+  not need.
+- Records go to files and standing threads wake only on a push or an owner
+  ask, because each wake of an idle thread can be a full rewrite.
+- Past about 250k tokens every call re-reads that much; compaction already
+  resets the thread at about 384k, so a scheduled swap would only add a rewrite.
+- What every session loads at startup is paid again on every call, so it is the
+  cheapest place to save.

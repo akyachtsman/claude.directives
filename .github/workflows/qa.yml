@@ -404,13 +404,23 @@ jobs:
       # cold-every-run behaviour it exists to eliminate (Codex, #238). Bumping
       # the pin edits this file, which changes this key, which saves fresh.
       # restore-keys means an unrelated edit still reuses the previous browsers.
+      # The OS release is in the key (and so in the restore prefix) because a
+      # browser build is per release: without it, this prefix could restore an
+      # entry the shared-qa self-test saved on a 26.04 runner, or the reverse
+      # (templates/actions/ui-suite/action.yml, the same step, 2026-11-17).
+      - name: Name the runner's OS release (browser cache key)
+        id: os-release
+        run: |
+          . /etc/os-release
+          echo "release=${ID}-${VERSION_ID}" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('.github/workflows/qa.yml') }}
-          restore-keys: pw-${{ runner.os }}-
+          key: pw-${{ runner.os }}-${{ steps.os-release.outputs.release }}-${{ hashFiles('.github/workflows/qa.yml') }}
+          restore-keys: pw-${{ runner.os }}-${{ steps.os-release.outputs.release }}-
 
       # Split so the log shows WHICH half is slow. The browser download is what
       # the cache above spares; the apt step never is. A single combined step

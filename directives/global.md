@@ -706,6 +706,37 @@ its own) — so none of the tiers apply. A fork, and a skill run in a subagent w
 code.claude.com/docs/en/sub-agents).
 Both are environment settings the owner changes; a session never sets either.
 
+## Token Cost and Session Models (owner rulings, 2026-11-16 · 2026-11-17)
+**Why:** every tool call re-sends the whole thread. A cached token is read at
+about 1/40 of its write cost, and a thread idle for over an hour is rewritten in
+full at its next wake. Measured on chat projects: cache writes were about half of
+spend and re-reads about a third (→ `docs/standards/session-mechanics.md` → *Token cost*).
+
+⛔ **THE MOMENT THEY FIRE: starting a thread, waking a standing thread, resuming
+an agent or reviewer, and a thread passing about 250k tokens.**
+1. **One job per thread.** A thread ends with its job; new work gets a new thread.
+2. **Routine records go to files.** Wake a standing thread only when something
+   was pushed or needs the owner.
+3. **Resume a reviewer, agent or thread only if its last request was under an
+   hour ago and its history is still needed;** otherwise start fresh — a fresh
+   reviewer per PR, not one resumed over many rounds.
+4. **Above about 250k tokens in a thread:** make fewer requests, batch simple
+   steps, and start long new jobs fresh. No scheduled thread swaps; compaction
+   already resets the thread at about 384k.
+5. **Keep what every session loads at startup lean.** Load more only on demand.
+
+**Models (owner, 2026-11-16).** Every coordinator, code projects included, runs
+Sonnet 5.5 (`claude-sonnet-5-5`), and a thread defaults to Sonnet 5.5.
+- **Whoever starts a thread picks its model at the start.** A session never
+  switches its own model.
+- **Opus starts only for what a project lists.** Each project keeps an
+  **Opus-start list** in its own `CLAUDE.md` (`templates/CLAUDE-template.md` →
+  *Opus-Start List*): the jobs where being wrong costs more than the model does.
+  A thread for anything on the list starts on Opus; everything else (refresh
+  PRs, UI moves, docs, config, PR upkeep) stays on Sonnet.
+- **Haiku only for search subagents** (→ *Subagent Model Selection*).
+- A project with no list starts every thread on Sonnet 5.5.
+
 ## Burst Intake — Multiple Asks at Once (owner ruling, 2026-08-18)
 
 → *Parallel Tasking via Subagents* governs a task list already written, and the

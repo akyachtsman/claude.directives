@@ -376,12 +376,27 @@ runs:
     # ~15s against a constant nobody has bounded. Recorded as a finding
     # (claude.directives #303), not as procedure: do not add a warming step
     # without re-measuring.
+    #
+    # ⚠️ The key names the runner's OS RELEASE, not just `runner.os` (2026-11-17).
+    # Playwright downloads browser builds per release, and `ubuntu-latest` moved
+    # from 24.04 to 26.04 runner by runner (actions/runner-images#14748). With
+    # `Linux` alone in the key, a 26.04 runner restored the WebKit built for
+    # 24.04, which then died at launch on `libicudata.so.74` (claude.directives
+    # #507, run 44021144978). install-deps cannot repair that: the binary itself
+    # is the wrong build.
+    - name: Name the runner's OS release (browser cache key)
+      id: os-release
+      shell: bash
+      run: |
+        . /etc/os-release
+        echo "release=${ID}-${VERSION_ID}" >> "$GITHUB_OUTPUT"
+
     - name: Cache Playwright browsers
       id: pw-cache
       uses: actions/cache@v6
       with:
         path: ~/.cache/ms-playwright
-        key: pw-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.tests-dir)) }}
+        key: pw-${{ runner.os }}-${{ steps.os-release.outputs.release }}-${{ hashFiles(format('{0}/package-lock.json', inputs.tests-dir)) }}
 
     - name: Install Playwright browsers
       # Both browsers: playwright.config.js defines a webkit project (iPhone 12)
